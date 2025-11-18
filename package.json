@@ -1,0 +1,77 @@
+{
+  "name": "agent-execution-engine",
+  "version": "0.0.1",
+  "description": "Generic execution engine for CLI agents with process management, resilience, and workflow orchestration",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./process": {
+      "types": "./dist/process/index.d.ts",
+      "default": "./dist/process/index.js"
+    },
+    "./engine": {
+      "types": "./dist/engine/index.d.ts",
+      "default": "./dist/engine/index.js"
+    },
+    "./resilience": {
+      "types": "./dist/resilience/index.d.ts",
+      "default": "./dist/resilience/index.js"
+    },
+    "./workflow": {
+      "types": "./dist/workflow/index.d.ts",
+      "default": "./dist/workflow/index.js"
+    },
+    "./agents": {
+      "types": "./dist/agents/index.d.ts",
+      "default": "./dist/agents/index.js"
+    },
+    "./agents/claude": {
+      "types": "./dist/agents/claude/index.d.ts",
+      "default": "./dist/agents/claude/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
+    "postversion": "git push && git push --tags",
+    "publish:npm": "npm publish --access public",
+    "release:patch": "npm version patch && npm run publish:npm",
+    "release:minor": "npm version minor && npm run publish:npm",
+    "release:major": "npm version major && npm run publish:npm"
+  },
+  "keywords": [
+    "execution-engine",
+    "process-management",
+    "workflow",
+    "resilience",
+    "cli-agent",
+    "orchestration"
+  ],
+  "author": "Alex Ngai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexngai/agent-execution-engine.git"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4"
+  }
+}
