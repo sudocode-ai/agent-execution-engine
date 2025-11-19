@@ -1,0 +1,41 @@
+# Source files (not needed in published package)
+src/
+tests/
+.claude/
+
+# Config files (not needed in published package)
+tsconfig.json
+tsconfig.build.json
+tsconfig.test.json
+vitest.config.ts
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/

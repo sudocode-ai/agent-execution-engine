@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": "./src",
     "composite": true,
-    "incremental": true
+    "incremental": true,
+    "noEmit": false,
+    "allowImportingTsExtensions": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "tests"]
