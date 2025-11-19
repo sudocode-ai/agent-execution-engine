@@ -13,9 +13,17 @@ describe("Task Retry Logic", () => {
   let engine: SimpleExecutionEngine;
   let processManager: MockProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new MockProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   describe("No Retry Behavior", () => {

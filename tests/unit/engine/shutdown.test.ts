@@ -13,15 +13,24 @@ describe("Engine Shutdown", () => {
   let engine: SimpleExecutionEngine;
   let processManager: MockProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new MockProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   describe("Shutdown with Queued Tasks", () => {
     it("clears all queued tasks", async () => {
       // Create engine with 0 concurrency to keep tasks queued
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 0,
       });
 
@@ -162,6 +171,7 @@ describe("Engine Shutdown", () => {
     it("clears both queued and running tasks", async () => {
       // Create engine with limited concurrency
       const limitedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 1,
       });
 
@@ -285,6 +295,7 @@ describe("Engine Shutdown", () => {
 
     it("resets metrics after shutdown", async () => {
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 2,
       });
 

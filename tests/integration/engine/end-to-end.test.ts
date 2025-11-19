@@ -13,9 +13,17 @@ describe('Engine + Process Layer Integration', () => {
   let engine: SimpleExecutionEngine;
   let processManager: SimpleProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new SimpleProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   afterEach(async () => {
@@ -39,6 +47,7 @@ describe('Engine + Process Layer Integration', () => {
 
     it('respects custom maxConcurrent config', () => {
       const customEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 5,
       });
 
@@ -101,6 +110,7 @@ describe('Engine + Process Layer Integration', () => {
   describe('Configuration', () => {
     it('passes custom claude path through to process manager', () => {
       const customEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         claudePath: '/custom/path/to/claude',
       });
 
@@ -111,7 +121,9 @@ describe('Engine + Process Layer Integration', () => {
     });
 
     it('handles default configuration', () => {
-      const defaultEngine = new SimpleExecutionEngine(processManager);
+      const defaultEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
+      });
 
       const metrics = defaultEngine.getMetrics();
       expect(metrics.maxConcurrent).toBe(3); // default
@@ -164,6 +176,7 @@ describe('Engine + Process Layer Integration', () => {
     it('supports multiple engines sharing one process manager', () => {
       const engine2 = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 2,
+        defaultProcessConfig,
       });
 
       // Both engines should work independently
@@ -178,7 +191,9 @@ describe('Engine + Process Layer Integration', () => {
 
     it('supports multiple engines with separate process managers', () => {
       const processManager2 = new SimpleProcessManager();
-      const engine2 = new SimpleExecutionEngine(processManager2);
+      const engine2 = new SimpleExecutionEngine(processManager2, {
+        defaultProcessConfig,
+      });
 
       // Each should have independent metrics
       const metrics1 = engine.getMetrics();

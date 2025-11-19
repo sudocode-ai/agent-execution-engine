@@ -9,10 +9,10 @@
  */
 
 // Types and interfaces
-export * from './types/index.js';
+export * from "./types/index.js";
 
 // Agent registry
-export * from './registry.js';
+export * from "./registry.js";
 
 // Built-in agents
-export * from './claude/index.js';
+export * from "./claude/index.js";

@@ -59,13 +59,51 @@ export class SimpleExecutionEngine implements IExecutionEngine {
   /**
    * Create a new SimpleExecutionEngine
    *
-   * @param processManager - Process manager for spawning Claude processes
-   * @param config - Engine configuration options
+   * @param processManager - Process manager for spawning processes
+   * @param config - Engine configuration (required, must include defaultProcessConfig)
+   *
+   * @example
+   * ```typescript
+   * const adapter = new ClaudeCodeAdapter();
+   * const processConfig = adapter.buildProcessConfig({
+   *   workDir: '/path/to/project',
+   *   print: true,
+   *   outputFormat: 'stream-json',
+   * });
+   *
+   * const engine = new SimpleExecutionEngine(processManager, {
+   *   maxConcurrent: 3,
+   *   defaultProcessConfig: processConfig,
+   * });
+   * ```
    */
   constructor(
     private _processManager: IProcessManager,
     private _config: EngineConfig = {}
   ) {
+    // Validate required configuration
+    if (!_config.defaultProcessConfig) {
+      throw new Error(
+        "SimpleExecutionEngine requires defaultProcessConfig in EngineConfig. " +
+        "This should be built using an agent adapter (e.g., ClaudeCodeAdapter.buildProcessConfig()). " +
+        "Example: new SimpleExecutionEngine(processManager, { defaultProcessConfig: adapter.buildProcessConfig({...}) })"
+      );
+    }
+
+    if (!_config.defaultProcessConfig.executablePath) {
+      throw new Error(
+        "defaultProcessConfig.executablePath is required. " +
+        "Ensure your agent adapter provides this field."
+      );
+    }
+
+    if (!_config.defaultProcessConfig.args || !Array.isArray(_config.defaultProcessConfig.args)) {
+      throw new Error(
+        "defaultProcessConfig.args is required and must be an array. " +
+        "Ensure your agent adapter provides this field."
+      );
+    }
+
     // Initialize metrics
     this.metrics = {
       maxConcurrent: _config.maxConcurrent ?? 3,
@@ -280,20 +318,21 @@ export class SimpleExecutionEngine implements IExecutionEngine {
     let errorOutput = "";
 
     try {
-      // Build process configuration
-      // Note: In server, use buildClaudeConfig() from server/src/execution/builders/claude.ts
+      // Build process configuration by merging default config with task-specific config
+      // Validation is done in constructor, so we can safely use defaultProcessConfig here
+      const defaultConfig = this._config.defaultProcessConfig!;
+
       const processConfig: ProcessConfig = {
-        executablePath: this._config.claudePath || "claude",
-        args: [
-          "--print",
-          "--output-format",
-          "stream-json",
-          "--dangerously-skip-permissions",
-        ],
+        // Use provided default config
+        ...defaultConfig,
+        // Override with task-specific values
         workDir: task.workDir,
-        env: task.config.env,
-        timeout: task.config.timeout,
-      };
+        env: {
+          ...defaultConfig.env,
+          ...task.config.env,
+        },
+        timeout: task.config.timeout ?? defaultConfig.timeout,
+      } as ProcessConfig;
 
       // Acquire process from manager
       managedProcess = await this._processManager.acquireProcess(processConfig);
@@ -306,10 +345,11 @@ export class SimpleExecutionEngine implements IExecutionEngine {
 
       // Set up output collection
       this._processManager.onOutput(managedProcess.id, (data, type) => {
+        const dataStr = data.toString();
         if (type === "stdout") {
-          output += data.toString();
+          output += dataStr;
         } else {
-          errorOutput += data.toString();
+          errorOutput += dataStr;
         }
 
         // Call optional output handler for real-time processing
@@ -323,8 +363,14 @@ export class SimpleExecutionEngine implements IExecutionEngine {
         errorOutput += `Process error: ${error.message}\n`;
       });
 
-      // Send the prompt to the process
-      await this._processManager.sendInput(managedProcess.id, task.prompt);
+      // Send the prompt to the process (add newline if not present)
+      const promptWithNewline = task.prompt.endsWith("\n")
+        ? task.prompt
+        : task.prompt + "\n";
+      await this._processManager.sendInput(
+        managedProcess.id,
+        promptWithNewline
+      );
 
       // Close stdin to signal EOF (Claude Code waits for stdin to close in --print mode)
       this._processManager.closeInput(managedProcess.id);
@@ -334,10 +380,29 @@ export class SimpleExecutionEngine implements IExecutionEngine {
 
       // Build execution result
       const endTime = new Date();
+
+      // Determine success based on output format
+      // For stream-json, check the final result message's is_error field
+      // For other formats or if parsing fails, fall back to exit code
+      let success = managedProcess.exitCode === 0;
+      const lines = output.split("\n").filter((l) => l.trim());
+      if (lines.length > 0) {
+        try {
+          const lastLine = lines[lines.length - 1];
+          const parsed = JSON.parse(lastLine);
+          if (parsed.type === "result") {
+            // For stream-json result messages, use is_error field
+            success = parsed.is_error === false;
+          }
+        } catch {
+          // Not JSON or parsing failed, use exit code
+        }
+      }
+
       const result: ExecutionResult = {
         taskId: task.id,
         executionId: managedProcess.id,
-        success: managedProcess.exitCode === 0,
+        success,
         exitCode: managedProcess.exitCode ?? -1,
         output,
         error: errorOutput || undefined,
@@ -346,6 +411,13 @@ export class SimpleExecutionEngine implements IExecutionEngine {
         duration: endTime.getTime() - startTime.getTime(),
         metadata: this.parseMetadata(output),
       };
+
+      // Check if the task failed
+      if (!success) {
+        // Handle as failure - this will trigger retry logic if configured
+        this.handleTaskFailure(task.id, new Error(errorOutput || 'Process failed'));
+        return;
+      }
 
       // Store result
       this.completedResults.set(task.id, result);
@@ -410,13 +482,9 @@ export class SimpleExecutionEngine implements IExecutionEngine {
 
           if (!currentProcess) {
             reject(new Error("Process not found"));
-          } else if (currentProcess.status === "crashed") {
-            reject(
-              new Error(
-                `Process crashed with exit code ${currentProcess.exitCode}`
-              )
-            );
           } else {
+            // Don't reject on non-zero exit codes - let the output parsing determine success
+            // Claude Code returns exit code 1 even on successful execution
             resolve();
           }
         }

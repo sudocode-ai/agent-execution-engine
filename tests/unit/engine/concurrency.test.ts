@@ -13,9 +13,17 @@ describe("Concurrency Control", () => {
   let engine: SimpleExecutionEngine;
   let processManager: MockProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new MockProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   describe("Capacity Limits", () => {
@@ -23,6 +31,7 @@ describe("Concurrency Control", () => {
       // Create engine with maxConcurrent=2
       const limitedEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 2,
+        defaultProcessConfig,
       });
 
       const tasks: ExecutionTask[] = [
@@ -78,6 +87,7 @@ describe("Concurrency Control", () => {
     it("respects custom maxConcurrent config", () => {
       const customEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 5,
+        defaultProcessConfig,
       });
 
       const metrics = customEngine.getMetrics();
@@ -128,6 +138,7 @@ describe("Concurrency Control", () => {
       // Create engine with maxConcurrent=1 to make testing easier
       const singleEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 1,
+        defaultProcessConfig,
       });
 
       const beforeMetrics = singleEngine.getMetrics();
@@ -216,6 +227,7 @@ describe("Concurrency Control", () => {
     it("releases capacity when task completes", async () => {
       const customEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 1,
+        defaultProcessConfig,
       });
 
       const beforeMetrics = customEngine.getMetrics();
@@ -244,6 +256,7 @@ describe("Concurrency Control", () => {
     it("triggers processQueue when capacity becomes available", async () => {
       const customEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 1,
+        defaultProcessConfig,
       });
 
       // Submit 2 tasks - one should run, one should queue
@@ -320,6 +333,7 @@ describe("Concurrency Control", () => {
     it("queues tasks beyond capacity", async () => {
       const limitedEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 1,
+        defaultProcessConfig,
       });
 
       const tasks: ExecutionTask[] = [
@@ -375,6 +389,7 @@ describe("Concurrency Control", () => {
     it("handles maxConcurrent=0 (no execution)", async () => {
       const blockedEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 0,
+        defaultProcessConfig,
       });
 
       await blockedEngine.submitTask({
@@ -396,6 +411,7 @@ describe("Concurrency Control", () => {
     it("handles maxConcurrent=1 (sequential execution)", async () => {
       const sequentialEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 1,
+        defaultProcessConfig,
       });
 
       const metrics = sequentialEngine.getMetrics();
@@ -406,6 +422,7 @@ describe("Concurrency Control", () => {
     it("handles large maxConcurrent values", () => {
       const largeEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 100,
+        defaultProcessConfig,
       });
 
       const metrics = largeEngine.getMetrics();

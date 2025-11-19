@@ -7,13 +7,15 @@
  * @module execution/engine/types
  */
 
+import { ProcessConfig } from "@/process/types";
+
 /**
  * ExecutionTask - Represents a unit of work to be executed by a Claude Code agent
  */
 export interface ExecutionTask {
   // Identity
   id: string;
-  type: 'issue' | 'spec' | 'custom';
+  type: "issue" | "spec" | "custom";
   entityId?: string; // Issue/spec ID if applicable
 
   // Execution context
@@ -94,11 +96,11 @@ export interface EngineMetrics {
  * TaskStatus - Discriminated union for task state tracking
  */
 export type TaskStatus =
-  | { state: 'queued'; position: number }
-  | { state: 'running'; processId: string; startedAt: Date }
-  | { state: 'completed'; result: ExecutionResult }
-  | { state: 'failed'; error: string }
-  | { state: 'cancelled'; cancelledAt: Date };
+  | { state: "queued"; position: number }
+  | { state: "running"; processId: string; startedAt: Date }
+  | { state: "completed"; result: ExecutionResult }
+  | { state: "failed"; error: string }
+  | { state: "cancelled"; cancelledAt: Date };
 
 /**
  * TaskCompleteHandler - Callback for task completion events
@@ -114,9 +116,36 @@ export type TaskFailedHandler = (taskId: string, error: Error) => void;
  * EngineConfig - Configuration options for execution engines
  */
 export interface EngineConfig {
-  maxConcurrent?: number; // Maximum concurrent processes (default: 3)
-  claudePath?: string; // Path to Claude executable (default: 'claude')
-  onOutput?: (data: Buffer, type: 'stdout' | 'stderr') => void; // Optional output handler for real-time processing
+  /**
+   * Maximum number of concurrent processes (default: 3)
+   */
+  maxConcurrent?: number;
+
+  /**
+   * DEPRECATED: Use defaultProcessConfig instead
+   * Path to Claude executable (default: 'claude')
+   */
+  claudePath?: string;
+
+  /**
+   * REQUIRED: Default process configuration to use for all tasks
+   * This should be built using an agent adapter (e.g., ClaudeCodeAdapter.buildProcessConfig())
+   *
+   * Required fields:
+   * - executablePath: Path to the CLI executable
+   * - args: Command-line arguments array
+   *
+   * Optional fields:
+   * - workDir: Default working directory (overridden by task.workDir)
+   * - env: Environment variables (merged with task.config.env)
+   * - timeout: Default timeout (overridden by task.config.timeout)
+   */
+  defaultProcessConfig?: Partial<ProcessConfig>;
+
+  /**
+   * Optional output handler for real-time processing of stdout/stderr
+   */
+  onOutput?: (data: Buffer, type: "stdout" | "stderr") => void;
 }
 
 /**

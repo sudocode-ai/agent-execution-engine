@@ -13,15 +13,24 @@ describe("Task Cancellation", () => {
   let engine: SimpleExecutionEngine;
   let processManager: MockProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new MockProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   describe("Cancel Queued Task", () => {
     it("removes queued task before execution", async () => {
       // Create engine with 0 concurrency to keep tasks queued
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 0,
       });
 
@@ -56,6 +65,7 @@ describe("Task Cancellation", () => {
 
     it("cancels correct task when multiple tasks queued", async () => {
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 0,
       });
 
@@ -192,6 +202,7 @@ describe("Task Cancellation", () => {
     it("starts next queued task after cancellation", async () => {
       // Set maxConcurrent to 1 to test sequential execution
       const limitedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 1,
       });
 
@@ -260,6 +271,7 @@ describe("Task Cancellation", () => {
 
     it("does not error when cancelling same task twice", async () => {
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 0,
       });
 
@@ -320,6 +332,7 @@ describe("Task Cancellation", () => {
   describe("Edge Cases", () => {
     it("handles concurrent cancellations gracefully", async () => {
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 0,
       });
 
@@ -376,6 +389,7 @@ describe("Task Cancellation", () => {
 
     it("cancels task with dependencies correctly", async () => {
       const blockedEngine = new SimpleExecutionEngine(processManager, {
+        defaultProcessConfig,
         maxConcurrent: 0,
       });
 

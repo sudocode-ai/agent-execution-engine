@@ -38,6 +38,7 @@
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "test": "vitest",
+    "test:e2e": "RUN_E2E_TESTS=true vitest --run tests/e2e",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build && npm test",

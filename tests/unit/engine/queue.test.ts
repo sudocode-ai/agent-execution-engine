@@ -13,9 +13,17 @@ describe("Task Queue", () => {
   let engine: SimpleExecutionEngine;
   let processManager: MockProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new MockProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   describe("submitTask", () => {
@@ -74,6 +82,7 @@ describe("Task Queue", () => {
       // Create engine with 0 concurrency to prevent execution attempts
       const blockedEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 0,
+        defaultProcessConfig,
       });
 
       await blockedEngine.submitTask(task);
@@ -127,6 +136,7 @@ describe("Task Queue", () => {
       // Create engine with 0 concurrency to prevent execution
       const blockedEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 0,
+        defaultProcessConfig,
       });
 
       const tasks: ExecutionTask[] = [
@@ -179,6 +189,7 @@ describe("Task Queue", () => {
     it("respects custom maxConcurrent config", () => {
       const customEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 5,
+        defaultProcessConfig,
       });
 
       const metrics = customEngine.getMetrics();
@@ -206,6 +217,7 @@ describe("Task Queue", () => {
       // Create engine with 0 concurrency to keep tasks in queue
       const blockedEngine = new SimpleExecutionEngine(processManager, {
         maxConcurrent: 0,
+        defaultProcessConfig,
       });
 
       const tasks: ExecutionTask[] = [

@@ -13,9 +13,17 @@ describe("Task Dependency Resolution", () => {
   let engine: SimpleExecutionEngine;
   let processManager: MockProcessManager;
 
+  // Default process config for tests (minimal valid config)
+  const defaultProcessConfig = {
+    executablePath: "mock-cli",
+    args: ["--test"],
+  };
+
   beforeEach(() => {
     processManager = new MockProcessManager();
-    engine = new SimpleExecutionEngine(processManager);
+    engine = new SimpleExecutionEngine(processManager, {
+      defaultProcessConfig,
+    });
   });
 
   describe("Dependency Checking", () => {
@@ -421,7 +429,9 @@ describe("Task Dependency Resolution", () => {
     it("handles mix of successful and failed dependencies", async () => {
       // Create a fresh engine and process manager for this test
       const testProcessManager = new MockProcessManager();
-      const testEngine = new SimpleExecutionEngine(testProcessManager);
+      const testEngine = new SimpleExecutionEngine(testProcessManager, {
+        defaultProcessConfig,
+      });
 
       // task-1 succeeds
       testProcessManager.shouldFail = false;
