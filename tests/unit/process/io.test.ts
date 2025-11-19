@@ -210,7 +210,13 @@ describe.sequential("Process I/O Communication", () => {
         executablePath: "node",
         args: [
           "-e",
-          'console.log("stdout msg"); console.error("stderr msg"); setTimeout(() => {}, 200);',
+          `
+          // Write to both streams and ensure they're flushed before exiting
+          process.stdout.write("stdout msg\\n");
+          process.stderr.write("stderr msg\\n");
+          // Keep process alive briefly to ensure output is delivered
+          setTimeout(() => process.exit(0), 100);
+          `,
         ],
         workDir: process.cwd(),
       };
@@ -224,8 +230,13 @@ describe.sequential("Process I/O Communication", () => {
         outputs.push({ data: data.toString(), type });
       });
 
-      // Wait for output with longer timeout for reliability under parallel test load
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Wait for process to exit, ensuring all output is captured
+      await new Promise<void>((resolve) => {
+        managedProcess.process.once("exit", () => {
+          // Give a small delay for any buffered output to be delivered
+          setTimeout(resolve, 50);
+        });
+      });
 
       expect(
         outputs.some(
@@ -239,9 +250,6 @@ describe.sequential("Process I/O Communication", () => {
         ),
         `Expected stderr in outputs: ${JSON.stringify(outputs)}`
       ).toBeTruthy();
-
-      // Cleanup
-      managedProcess.process.kill();
     });
 
     it("throws error for non-existent process", () => {

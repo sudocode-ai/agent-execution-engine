@@ -468,8 +468,10 @@ describe.sequential("Process Termination", () => {
           let cleaned = false;
           process.on('SIGTERM', () => {
             cleaned = true;
-            console.log('cleaned');
-            process.exit(0);
+            // Use write + flush to ensure output is delivered before exit
+            process.stdout.write('cleaned\\n');
+            // Small delay to ensure write completes
+            setTimeout(() => process.exit(0), 50);
           });
           setInterval(() => {}, 1000);
         `,
@@ -489,8 +491,16 @@ describe.sequential("Process Termination", () => {
 
       await manager.terminateProcess(managedProcess.id);
 
-      // Wait for termination to complete and output to be captured
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Wait for process to exit completely
+      await new Promise<void>((resolve) => {
+        if (managedProcess.exitCode !== null) {
+          resolve();
+        } else {
+          managedProcess.process.once("exit", () => {
+            setTimeout(resolve, 100);
+          });
+        }
+      });
 
       // Process should have had time to clean up
       expect(output.includes("cleaned")).toBeTruthy();
@@ -502,10 +512,11 @@ describe.sequential("Process Termination", () => {
         args: [
           "-e",
           `
-          // Ignore SIGTERM completely
+          // Ignore SIGTERM completely, but write output immediately
           process.on('SIGTERM', () => {
-            console.log('ignored');
-            // Don't exit
+            // Use synchronous write to ensure output is sent
+            process.stdout.write('ignored\\n');
+            // Don't exit - force SIGKILL path
           });
           setInterval(() => {}, 1000);
         `,
@@ -516,20 +527,24 @@ describe.sequential("Process Termination", () => {
       const managedProcess = await manager.acquireProcess(config);
 
       let output = "";
-      managedProcess.streams.stdout.on("data", (data) => {
+      manager.onOutput(managedProcess.id, (data) => {
         output += data.toString();
       });
 
       // Wait for process to be ready and listener to be set up
       await new Promise((resolve) => setTimeout(resolve, 100));
 
+      const terminateStart = Date.now();
       await manager.terminateProcess(managedProcess.id);
+      const terminateDuration = Date.now() - terminateStart;
 
-      // Wait for force kill to complete and output to be captured
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Should have waited the full grace period before SIGKILL
+      expect(terminateDuration >= 1000).toBeTruthy();
 
       // Process should be killed despite ignoring SIGTERM
       expect(managedProcess.process.killed).toBe(true);
+
+      // Output should have been captured before SIGKILL
       expect(output.includes("ignored")).toBeTruthy();
     });
   });
