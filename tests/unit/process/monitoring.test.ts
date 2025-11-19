@@ -8,8 +8,8 @@
  */
 
 import { describe, it, beforeEach, afterEach , expect } from 'vitest'
-import { SimpleProcessManager } from '@/process/simple-manager.ts';
-import type { ProcessConfig } from '@/process/types.ts';
+import { SimpleProcessManager } from '@/process/simple-manager';
+import type { ProcessConfig } from '@/process/types';
 
 describe('Process Monitoring and Metrics', () => {
   let manager: SimpleProcessManager;

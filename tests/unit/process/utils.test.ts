@@ -11,7 +11,7 @@ import {
   formatDuration,
   isValidSignal,
   formatProcessError,
-} from '@/process/utils.ts';
+} from '@/process/utils';
 
 describe('generateId', () => {
   it('generates an ID with the specified prefix', () => {

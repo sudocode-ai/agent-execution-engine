@@ -11,9 +11,9 @@ import {
   sleep,
   createAttempt,
   calculateTotalRetryDelay,
-} from '@/resilience/retry.ts';
-import type { RetryPolicy } from '@/resilience/types.ts';
-import type { ExecutionResult } from '@/engine/types.ts';
+} from '@/resilience/retry';
+import type { RetryPolicy } from '@/resilience/types';
+import type { ExecutionResult } from '@/engine/types';
 
 describe('Retry Logic', () => {
   describe('calculateBackoff', () => {

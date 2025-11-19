@@ -10,7 +10,7 @@ import {
   mergeContext,
   evaluateCondition,
   createContext,
-} from '@/workflow/utils.ts';
+} from '@/workflow/utils';
 
 describe('Workflow Utilities', () => {
   describe('generateId', () => {

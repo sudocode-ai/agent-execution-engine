@@ -6,10 +6,10 @@
  */
 
 import { describe, it, beforeEach, expect } from "vitest";
-import { LinearOrchestrator } from "@/workflow/linear-orchestrator.ts";
-import type { IResilientExecutor } from "@/resilience/executor.ts";
-import type { ResilientExecutionResult } from "@/resilience/types.ts";
-import type { WorkflowDefinition } from "@/workflow/types.ts";
+import { LinearOrchestrator } from '@/workflow/linear-orchestrator';
+import type { IResilientExecutor } from '@/resilience/executor';
+import type { ResilientExecutionResult } from '@/resilience/types';
+import type { WorkflowDefinition } from '@/workflow/types';
 
 // Mock type for ExecutionLifecycleService (server-specific dependency)
 interface ExecutionLifecycleService {

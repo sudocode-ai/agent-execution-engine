@@ -6,7 +6,7 @@
  */
 
 import { describe, it, beforeEach, afterEach, expect } from 'vitest'
-import { SimpleProcessManager } from '@/process/simple-manager.ts';
+import { SimpleProcessManager } from '@/process/simple-manager';
 
 describe('SimpleProcessManager', () => {
   let manager: SimpleProcessManager;

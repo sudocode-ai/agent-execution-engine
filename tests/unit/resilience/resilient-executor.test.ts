@@ -3,8 +3,8 @@
  */
 
 import { describe, it, beforeEach , expect } from 'vitest'
-import { ResilientExecutor } from '@/resilience/resilient-executor.ts';
-import type { IExecutionEngine } from '@/engine/engine.ts';
+import { ResilientExecutor } from '@/resilience/resilient-executor';
+import type { IExecutionEngine } from '@/engine/engine';
 import type {
   ExecutionTask,
   ExecutionResult,
@@ -12,8 +12,8 @@ import type {
   EngineMetrics,
   TaskCompleteHandler,
   TaskFailedHandler,
-} from '@/engine/types.ts';
-import type { RetryPolicy, ExecutionAttempt } from '@/resilience/types.ts';
+} from '@/engine/types';
+import type { RetryPolicy, ExecutionAttempt } from '@/resilience/types';
 
 /**
  * Mock Engine for testing

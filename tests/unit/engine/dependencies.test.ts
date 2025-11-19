@@ -5,9 +5,9 @@
  */
 
 import { describe, it, beforeEach , expect } from 'vitest'
-import { SimpleExecutionEngine } from "@/engine/simple-engine.ts";
-import { MockProcessManager } from "./mock-process-manager.ts";
-import type { ExecutionTask } from "@/engine/types.ts";
+import { SimpleExecutionEngine } from "@/engine/simple-engine";
+import { MockProcessManager } from "./mock-process-manager.js";
+import type { ExecutionTask } from "@/engine/types";
 
 describe("Task Dependency Resolution", () => {
   let engine: SimpleExecutionEngine;

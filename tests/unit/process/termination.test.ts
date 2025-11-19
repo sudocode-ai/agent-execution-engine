@@ -6,8 +6,8 @@
  */
 
 import { describe, it, afterEach, beforeEach, expect } from "vitest";
-import { SimpleProcessManager } from "@/process/simple-manager.ts";
-import type { ProcessConfig } from "@/process/types.ts";
+import { SimpleProcessManager } from '@/process/simple-manager';
+import type { ProcessConfig } from '@/process/types';
 
 describe.sequential("Process Termination", () => {
   let manager: SimpleProcessManager;

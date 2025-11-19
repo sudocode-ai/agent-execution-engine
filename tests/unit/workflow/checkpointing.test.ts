@@ -4,14 +4,14 @@
 
 import { randomUUID } from "crypto";
 import { describe, it, beforeEach, expect } from "vitest";
-import { LinearOrchestrator } from "@/workflow/linear-orchestrator.ts";
-import { InMemoryWorkflowStorage } from "@/workflow/memory-storage.ts";
-import type { IResilientExecutor } from "@/resilience/executor.ts";
-import type { ResilientExecutionResult } from "@/resilience/types.ts";
+import { LinearOrchestrator } from '@/workflow/linear-orchestrator';
+import { InMemoryWorkflowStorage } from '@/workflow/memory-storage';
+import type { IResilientExecutor } from '@/resilience/executor';
+import type { ResilientExecutionResult } from '@/resilience/types';
 import type {
   WorkflowDefinition,
   WorkflowCheckpoint,
-} from "@/workflow/types.ts";
+} from '@/workflow/types';
 
 /**
  * Mock Resilient Executor for testing

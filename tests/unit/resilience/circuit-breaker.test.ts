@@ -10,7 +10,7 @@ import {
   getState,
   getFailureRate,
   getSuccessRate,
-} from '@/resilience/circuit-breaker.ts';
+} from '@/resilience/circuit-breaker';
 
 describe('Circuit Breaker', () => {
   describe('CircuitBreakerManager', () => {
