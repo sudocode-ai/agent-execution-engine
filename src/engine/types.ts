@@ -7,7 +7,7 @@
  * @module execution/engine/types
  */
 
-import { ProcessConfig } from "@/process/types";
+import { ProcessConfig } from "../process/types.js";
 
 /**
  * ExecutionTask - Represents a unit of work to be executed by a Claude Code agent

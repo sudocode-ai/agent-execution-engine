@@ -36,7 +36,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc",
     "test": "vitest",
     "test:e2e": "RUN_E2E_TESTS=true vitest --run tests/e2e",
     "typecheck": "tsc --noEmit",
