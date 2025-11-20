@@ -12,3 +12,12 @@ export {
   makePathRelative,
 } from './mappers.js';
 export type { ToolMapping } from './mappers.js';
+export {
+  extractUnifiedDiffHunks,
+  concatenateDiffHunks,
+  createUnifiedDiff,
+  createUnifiedDiffHunk,
+  extractEditChanges,
+  extractResultDiff,
+  isValidUnifiedDiff,
+} from './diff-utils.js';

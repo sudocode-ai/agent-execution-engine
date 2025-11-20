@@ -28,6 +28,10 @@ import type {
   CursorMcpTool,
 } from '../types/tools.js';
 import { getToolName } from '../types/tools.js';
+import {
+  extractEditChanges,
+  extractResultDiff,
+} from './diff-utils.js';
 
 /**
  * Tool mapping result containing action type and display content.
@@ -244,84 +248,42 @@ function mapEditTool(
   const filePath = toolCall.editToolCall.args.path || '';
   const relativePath = makePathRelative(filePath, workDir);
 
-  let unifiedDiff: string | undefined;
+  let changes: FileChange[];
 
   if (includeResult && toolCall.editToolCall.result) {
-    unifiedDiff = extractEditDiff(toolCall);
-  }
+    // Try to extract from args first (has strategy info)
+    const argsChanges = extractEditChanges(
+      toolCall.editToolCall.args,
+      relativePath
+    );
 
-  const changes: FileChange[] = unifiedDiff
-    ? [{ type: 'edit', unifiedDiff }]
-    : [{ type: 'edit' }];
+    if (argsChanges.length > 0) {
+      changes = argsChanges;
+    } else {
+      // Fallback: extract from result.success.diffString
+      const resultChange = extractResultDiff(
+        toolCall.editToolCall.result,
+        relativePath
+      );
+      changes = resultChange ? [resultChange] : [{ type: 'edit' }];
+    }
+  } else {
+    // No result, just indicate edit happened
+    changes = [{ type: 'edit' }];
+  }
 
   let content = `Edit file: \`${relativePath}\``;
 
-  if (unifiedDiff) {
-    content += `\n\n\`\`\`diff\n${unifiedDiff}\n\`\`\``;
+  // Include diff in content if available
+  const firstChange = changes[0];
+  if (firstChange && 'unifiedDiff' in firstChange && firstChange.unifiedDiff) {
+    content += `\n\n\`\`\`diff\n${firstChange.unifiedDiff}\n\`\`\``;
   }
 
   return {
     actionType: { kind: 'file_edit', path: relativePath, changes },
     content,
   };
-}
-
-/**
- * Extract unified diff from edit tool result.
- *
- * Handles 3 strategies: applyPatch, strReplace, multiStrReplace.
- */
-function extractEditDiff(toolCall: CursorEditTool): string | undefined {
-  const successResult = toolCall.editToolCall.result?.success as any;
-  if (!successResult) return undefined;
-
-  // Strategy 1: Use diffString from result
-  if (successResult.diffString) {
-    return successResult.diffString;
-  }
-
-  const args = toolCall.editToolCall.args;
-
-  // Strategy 2: applyPatch
-  if (args.applyPatch) {
-    return args.applyPatch.patchContent;
-  }
-
-  // Strategy 3: strReplace
-  if (args.strReplace) {
-    const oldText = args.strReplace.oldText || '';
-    const newText = args.strReplace.newText || '';
-    return createSimpleDiff(oldText, newText);
-  }
-
-  // Strategy 4: multiStrReplace
-  if (args.multiStrReplace) {
-    return args.multiStrReplace.edits
-      .map((edit) => createSimpleDiff(edit.oldText, edit.newText))
-      .join('\n---\n');
-  }
-
-  return undefined;
-}
-
-/**
- * Create simple unified diff format.
- */
-function createSimpleDiff(oldText: string, newText: string): string {
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
-
-  const diff: string[] = [];
-
-  oldLines.forEach((line) => {
-    diff.push(`- ${line}`);
-  });
-
-  newLines.forEach((line) => {
-    diff.push(`+ ${line}`);
-  });
-
-  return diff.join('\n');
 }
 
 /**

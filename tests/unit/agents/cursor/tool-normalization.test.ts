@@ -255,8 +255,8 @@ describe('Tool Mapping', () => {
 
       const result = mapToolToActionWithResult(toolCall, workDir);
 
-      expect(result.content).toContain('- const x = 1');
-      expect(result.content).toContain('+ const x = 2');
+      expect(result.content).toContain('-const x = 1');
+      expect(result.content).toContain('+const x = 2');
     });
 
     it('should handle multiStrReplace strategy', () => {
@@ -279,10 +279,10 @@ describe('Tool Mapping', () => {
 
       const result = mapToolToActionWithResult(toolCall, workDir);
 
-      expect(result.content).toContain('- a');
-      expect(result.content).toContain('+ b');
-      expect(result.content).toContain('- c');
-      expect(result.content).toContain('+ d');
+      expect(result.content).toContain('-a');
+      expect(result.content).toContain('+b');
+      expect(result.content).toContain('-c');
+      expect(result.content).toContain('+d');
     });
   });
 
