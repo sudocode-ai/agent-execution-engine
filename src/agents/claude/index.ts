@@ -1,10 +1,56 @@
 /**
- * Claude Code Agent
+ * Claude Code Agent Module
  *
- * Claude Code-specific configuration, adapter, and utilities.
+ * Complete integration for Claude Code CLI.
  *
- * @module execution-engine/agents/claude
+ * @module agents/claude
  */
 
+// Legacy adapter (will be deprecated)
 export * from './config-builder.js';
 export * from './adapter.js';
+
+// Executor
+export { ClaudeCodeExecutor } from './executor.js';
+
+// Types
+export type {
+  ClaudeCodeConfig,
+  ClaudeStreamMessage,
+  SystemMessage,
+  UserMessage,
+  AssistantMessage,
+  ToolUseMessage,
+  ResultMessage,
+  ControlRequestMessage,
+  ControlResponseMessage,
+  ContentBlock,
+  TextBlock,
+  ToolUseBlock,
+  ControlRequest,
+  CanUseToolRequest,
+  HookCallbackRequest,
+  PermissionResult,
+  AllowResult,
+  DenyResult,
+  ControlResponse,
+  SuccessResponse,
+  ErrorResponse,
+  HookConfig,
+  HookOutput,
+  PermissionMode,
+  PermissionUpdate,
+  SdkControlRequest,
+} from './types/index.js';
+
+// Protocol
+export {
+  ProtocolPeer,
+  ClaudeAgentClient,
+  parseStreamJsonLine,
+  readStreamJson,
+  serializeStreamJson,
+  type IProtocolClient,
+  type MessageHandler,
+  type ErrorHandler as ProtocolErrorHandler,
+} from './protocol/index.js';
