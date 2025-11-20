@@ -14,8 +14,14 @@ import type {
   CursorAssistantMessage,
   CursorThinkingMessage,
   CursorResultMessage,
+  CursorToolCallMessage,
 } from '../types/messages.js';
 import { concatText } from '../types/messages.js';
+import { getToolName } from '../types/tools.js';
+import {
+  mapToolToAction,
+  mapToolToActionWithResult,
+} from './mappers.js';
 
 /**
  * State tracker for Cursor output normalization.
@@ -244,6 +250,154 @@ export class CursorNormalizationState {
 
     // Success - no entry needed (implicit)
     return null;
+  }
+
+  /**
+   * Handle tool call started event.
+   *
+   * Creates a new tool_use entry with 'running' status and tracks
+   * the call_id for later completion updates.
+   *
+   * @param message - Tool call message with subtype 'started'
+   * @param workDir - Working directory for path relativization
+   * @returns Tool use entry
+   */
+  handleToolCallStarted(
+    message: CursorToolCallMessage,
+    workDir: string
+  ): NormalizedEntry {
+    // Close any active streaming messages
+    this.assistantMessage = undefined;
+    this.thinkingMessage = undefined;
+
+    const toolCall = message.tool_call as any; // CursorToolCall type
+    const toolName = getToolName(toolCall);
+    const { actionType, content } = mapToolToAction(toolCall, workDir);
+
+    const index = this.nextIndex();
+    const entry: NormalizedEntry = {
+      index,
+      timestamp: new Date(),
+      type: {
+        kind: 'tool_use',
+        tool: {
+          toolName,
+          action: actionType,
+          status: 'running',
+        },
+      },
+      content,
+    };
+
+    // Track call_id → entry for result merging
+    if (message.call_id) {
+      this.toolCalls.set(message.call_id, { index, entry });
+    }
+
+    return entry;
+  }
+
+  /**
+   * Handle tool call completed event.
+   *
+   * Updates the existing tool_use entry with 'success' or 'failed' status
+   * and includes result data. Reuses the same entry index as the started event.
+   *
+   * @param message - Tool call message with subtype 'completed'
+   * @param workDir - Working directory for path relativization
+   * @returns Updated tool use entry, or null if no matching started event
+   */
+  handleToolCallCompleted(
+    message: CursorToolCallMessage,
+    workDir: string
+  ): NormalizedEntry | null {
+    // Find existing entry by call_id
+    const existing = message.call_id
+      ? this.toolCalls.get(message.call_id)
+      : undefined;
+
+    const toolCall = message.tool_call as any; // CursorToolCall type
+
+    if (!existing) {
+      // No matching started event - create standalone entry
+      const toolName = getToolName(toolCall);
+      const { actionType, content } = mapToolToActionWithResult(
+        toolCall,
+        workDir
+      );
+
+      return {
+        index: this.nextIndex(),
+        timestamp: new Date(),
+        type: {
+          kind: 'tool_use',
+          tool: {
+            toolName,
+            action: actionType,
+            status: 'success',
+          },
+        },
+        content,
+      };
+    }
+
+    // Update existing entry with result
+    const toolName = getToolName(toolCall);
+    const { actionType, content } = mapToolToActionWithResult(
+      toolCall,
+      workDir
+    );
+
+    // Determine status from result
+    const hasError = this.toolHasError(toolCall);
+    const status = hasError ? 'failed' : 'success';
+
+    return {
+      index: existing.index, // SAME index as started event
+      timestamp: new Date(),
+      type: {
+        kind: 'tool_use',
+        tool: {
+          toolName,
+          action: actionType,
+          status,
+        },
+      },
+      content,
+    };
+  }
+
+  /**
+   * Check if tool call result indicates an error.
+   *
+   * @param toolCall - Tool call to check
+   * @returns True if tool has error result
+   * @private
+   */
+  private toolHasError(toolCall: any): boolean {
+    // Check for failure result in various tool types
+    if ('shellToolCall' in toolCall) {
+      const result = toolCall.shellToolCall.result;
+      return result && typeof result === 'object' && 'failure' in result;
+    }
+
+    if ('editToolCall' in toolCall) {
+      const result = toolCall.editToolCall.result;
+      return result && typeof result === 'object' && 'failure' in result;
+    }
+
+    if ('writeToolCall' in toolCall) {
+      const result = toolCall.writeToolCall.result;
+      return result && typeof result === 'object' && 'failure' in result;
+    }
+
+    if ('mcpToolCall' in toolCall) {
+      const result = toolCall.mcpToolCall.result;
+      return result && typeof result === 'object' && 'failure' in result;
+    }
+
+    // Default to success if no failure field found
+    return false;
   }
 
   /**

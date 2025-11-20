@@ -160,6 +160,33 @@ function createSystemMessage(
 }
 
 /**
+ * Handle tool call message lifecycle.
+ *
+ * Routes to started or completed handler based on subtype.
+ *
+ * @param message - Tool call message
+ * @param state - Normalization state
+ * @param workDir - Working directory for path relativization
+ * @returns Normalized entry, or null if message should be skipped
+ */
+function handleToolCallMessage(
+  message: CursorMessage & { type: 'tool_call' },
+  state: CursorNormalizationState,
+  workDir: string
+): NormalizedEntry | null {
+  if (message.subtype === 'started') {
+    return state.handleToolCallStarted(message, workDir);
+  }
+
+  if (message.subtype === 'completed') {
+    return state.handleToolCallCompleted(message, workDir);
+  }
+
+  // Unknown subtype - skip
+  return null;
+}
+
+/**
  * Normalize a single Cursor message.
  *
  * Routes message to appropriate handler based on type.
@@ -189,9 +216,7 @@ function normalizeMessage(
       return state.handleThinkingMessage(message);
 
     case 'tool_call':
-      // Tool calls will be handled in next issue (i-4r0h)
-      // For now, skip them
-      return null;
+      return handleToolCallMessage(message, state, workDir);
 
     case 'result':
       return state.handleResultMessage(message);
