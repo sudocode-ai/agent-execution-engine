@@ -11,6 +11,9 @@
 // Types and interfaces
 export * from "./types/index.js";
 
+// Base executor
+export * from "./base/index.js";
+
 // Profile system
 export * from "./profiles/index.js";
 

@@ -78,19 +78,30 @@ Multi-step workflow execution:
 - `IWorkflowStorage` - Abstract interface for checkpoint storage
 - `InMemoryWorkflowStorage` - In-memory checkpoint implementation
 
-### Agents: CLI Agent Adapters (`/agents`)
+### Agents: CLI Agent Adapters and Executors (`/agents`)
 
-Agent-specific adapters for various CLI agents:
-- Agent-agnostic interface for building ProcessConfig
-- Metadata and capabilities declaration
-- Built-in support for Claude Code
-- Extensible for adding new agents (Gemini, Codex, etc.)
+**Two approaches for working with agents:**
+
+1. **Agent Adapters** (`IAgentAdapter`) - Simple configuration builders
+   - Agent-agnostic interface for building ProcessConfig
+   - Metadata and capabilities declaration
+   - Built-in support for Claude Code and Codex
+
+2. **Agent Executors** (`IAgentExecutor`) - Unified execution interface
+   - Complete abstraction layer for agent execution
+   - Normalized output format for consistent UI rendering
+   - Profile-based configuration management
+   - Interactive approval service support
+   - Session management and resumption
 
 **Key exports:**
-- `IAgentAdapter` - Interface for creating agent adapters
+- `IAgentAdapter` - Interface for creating agent adapters (simple approach)
 - `ClaudeCodeAdapter` - Built-in Claude Code adapter
-- `AgentRegistry` - Registry for managing multiple agents
-- `buildClaudeConfig()` - Claude Code-specific configuration builder
+- `AgentRegistry` - Registry for managing multiple agent adapters
+- `IAgentExecutor` - Unified executor interface (advanced approach)
+- `BaseAgentExecutor` - Abstract base class for custom executors
+- `AgentProfileRegistry` - Profile-based configuration system
+- `IApprovalService` - Interactive tool approval interface
 
 ## Installation
 
@@ -333,6 +344,314 @@ processManager.onOutput(process.id, (data, type) => {
 });
 ```
 
+## Agent Executors
+
+The execution engine provides a unified interface for different CLI agents through the `IAgentExecutor` interface. This advanced approach abstracts away protocol differences between agents and provides:
+
+- **Normalized output** - Consistent data structures across all agents
+- **Session management** - Resume previous sessions where supported
+- **Interactive approvals** - Control tool usage with approval services
+- **Profile system** - Multiple configurations per agent (e.g., "claude:plan", "cursor:interactive")
+
+### Quick Start with Agent Executors
+
+```typescript
+import {
+  AgentProfileRegistry,
+  BaseAgentExecutor,
+  type IAgentExecutor,
+  type ExecutionTask,
+  type AgentCapabilities,
+} from 'agent-execution-engine/agents';
+
+// 1. Create a custom executor (or use built-in ones)
+class MyAgentExecutor extends BaseAgentExecutor {
+  async executeTask(task: ExecutionTask) {
+    // Spawn process using existing infrastructure
+    const process = await this.spawnWithManager({
+      executablePath: 'my-agent',
+      args: ['--task', task.id],
+      workDir: task.workDir,
+      mode: 'structured',
+    });
+
+    // Send prompt
+    process.streams!.stdin.write(task.prompt + '\n');
+    process.streams!.stdin.end();
+
+    return { process };
+  }
+
+  async resumeTask(task: ExecutionTask, sessionId: string) {
+    // Resume logic (if supported)
+    throw new Error('Resume not supported');
+  }
+
+  async *normalizeOutput(stream, workDir) {
+    // Parse agent output → normalized format
+    for await (const chunk of stream) {
+      const line = chunk.data.toString();
+      yield {
+        index: 0,
+        type: { kind: 'assistant_message' },
+        content: line,
+      };
+    }
+  }
+
+  getCapabilities(): AgentCapabilities {
+    return {
+      supportsSessionResume: false,
+      requiresSetup: false,
+      supportsApprovals: false,
+      supportsMcp: false,
+      protocol: 'custom',
+    };
+  }
+}
+
+// 2. Register with profile system
+const registry = new AgentProfileRegistry();
+
+registry.registerExecutor('my-agent', (config) => {
+  return new MyAgentExecutor(config);
+});
+
+registry.registerProfile('my-agent', 'default', {
+  config: { workDir: '/tmp' },
+  displayName: 'My Agent',
+  description: 'Default configuration',
+});
+
+// 3. Get executor and use it
+const executor = registry.getExecutor({
+  executor: 'my-agent',
+  variant: 'default'
+});
+
+const spawned = await executor.executeTask({
+  id: 'task-1',
+  type: 'issue',
+  prompt: 'Build a feature',
+  workDir: '/path/to/project',
+  config: {},
+});
+```
+
+### Profile System
+
+Load agent profiles from JSON for easy configuration management:
+
+```typescript
+import { AgentProfileRegistry } from 'agent-execution-engine/agents';
+
+const registry = new AgentProfileRegistry();
+
+// Register executor factories
+registry.registerExecutor('claude-code', (config) =>
+  new ClaudeCodeExecutor(config)
+);
+
+registry.registerExecutor('cursor', (config) =>
+  new CursorExecutor(config)
+);
+
+// Load profiles from JSON
+registry.loadProfiles({
+  executors: {
+    'claude-code': {
+      default: {
+        config: { print: true, outputFormat: 'stream-json' },
+        displayName: 'Claude Code',
+        description: 'Standard configuration'
+      },
+      plan: {
+        config: {
+          print: true,
+          outputFormat: 'stream-json',
+          planMode: true
+        },
+        displayName: 'Claude Code (Plan Mode)',
+        description: 'Planning-focused configuration'
+      }
+    },
+    cursor: {
+      default: {
+        config: { force: true, model: 'auto' },
+        displayName: 'Cursor (Auto-approve)',
+        description: 'Cursor with auto-approval enabled'
+      },
+      interactive: {
+        config: { force: false, model: 'sonnet-4.5' },
+        displayName: 'Cursor (Interactive)',
+        description: 'Manual approval for each tool use'
+      }
+    }
+  }
+});
+
+// Get specific variant
+const claudePlanExecutor = registry.getExecutor({
+  executor: 'claude-code',
+  variant: 'plan'
+});
+
+const cursorInteractiveExecutor = registry.getExecutor({
+  executor: 'cursor',
+  variant: 'interactive'
+});
+```
+
+### Approval Services
+
+Control tool usage with custom approval logic:
+
+```typescript
+import {
+  type IApprovalService,
+  type ApprovalRequest,
+  type ApprovalDecision,
+} from 'agent-execution-engine/agents';
+
+// Auto-approve all tools (for CI/CD)
+class AutoApprovalService implements IApprovalService {
+  async requestApproval(request: ApprovalRequest): Promise<ApprovalDecision> {
+    return { status: 'approved' };
+  }
+}
+
+// Rule-based approval (approve reads, deny writes)
+class RuleBasedApprovalService implements IApprovalService {
+  async requestApproval(request: ApprovalRequest): Promise<ApprovalDecision> {
+    if (request.toolName === 'Read') {
+      return { status: 'approved' };
+    }
+    if (request.toolName === 'Write' || request.toolName === 'Bash') {
+      return { status: 'denied', reason: 'Write operations not allowed' };
+    }
+    return { status: 'denied', reason: 'Unknown tool' };
+  }
+}
+
+// Interactive approval (prompt user)
+class InteractiveApprovalService implements IApprovalService {
+  async requestApproval(request: ApprovalRequest): Promise<ApprovalDecision> {
+    // Show UI dialog, wait for user response
+    const approved = await showApprovalDialog(
+      `Allow ${request.toolName}?`,
+      request.context
+    );
+
+    return approved
+      ? { status: 'approved' }
+      : { status: 'denied', reason: 'User denied' };
+  }
+}
+
+// Set approval service on executor
+const executor = registry.getExecutor({ executor: 'claude-code' });
+executor.setApprovalService(new RuleBasedApprovalService());
+```
+
+### Normalized Output
+
+All agent executors produce a consistent output format:
+
+```typescript
+import type { NormalizedEntry } from 'agent-execution-engine/agents';
+
+const executor = registry.getExecutor({ executor: 'claude-code' });
+const spawned = await executor.executeTask(task);
+
+// Create output stream
+const outputStream = executor.createOutputChunks(spawned.process);
+
+// Normalize to unified format
+const normalizedStream = executor.normalizeOutput(
+  outputStream,
+  task.workDir
+);
+
+// Process normalized entries
+for await (const entry of normalizedStream) {
+  switch (entry.type.kind) {
+    case 'assistant_message':
+      console.log('Assistant:', entry.content);
+      break;
+
+    case 'thinking':
+      console.log('Thinking:', entry.type.reasoning);
+      break;
+
+    case 'tool_use':
+      const tool = entry.type.tool;
+      console.log(`Tool: ${tool.toolName}`);
+
+      if (tool.action.kind === 'file_edit') {
+        console.log(`Editing: ${tool.action.path}`);
+        console.log('Changes:', tool.action.changes);
+      }
+      break;
+
+    case 'error':
+      console.error('Error:', entry.type.error.message);
+      break;
+  }
+}
+```
+
+### Integration with Existing Layers
+
+Agent executors integrate seamlessly with the execution engine:
+
+```typescript
+import {
+  createProcessManager,
+  SimpleExecutionEngine,
+  ResilientExecutor,
+  LinearOrchestrator,
+  AgentProfileRegistry,
+} from 'agent-execution-engine';
+
+// Set up the full stack
+const processManager = createProcessManager({ /* ... */ });
+const engine = new SimpleExecutionEngine(processManager);
+const resilientExecutor = new ResilientExecutor(engine, {
+  maxAttempts: 3,
+  backoffStrategy: 'exponential',
+});
+const orchestrator = new LinearOrchestrator(resilientExecutor);
+
+// Set up agent profiles
+const agentRegistry = new AgentProfileRegistry();
+agentRegistry.registerExecutor('claude-code', /* ... */);
+agentRegistry.loadProfiles(/* ... */);
+
+// Use profiles in workflows
+const workflow = {
+  id: 'build-feature',
+  steps: [
+    {
+      id: 'plan',
+      taskType: 'spec',
+      prompt: 'Plan the feature architecture',
+      // Specify which agent profile to use
+      agentProfile: { executor: 'claude-code', variant: 'plan' }
+    },
+    {
+      id: 'implement',
+      taskType: 'issue',
+      prompt: 'Implement the planned feature',
+      dependsOn: ['plan'],
+      // Use different agent for implementation
+      agentProfile: { executor: 'cursor', variant: 'default' }
+    }
+  ]
+};
+
+await orchestrator.startWorkflow(workflow, '/path/to/project');
+```
+
 ## API Reference
 
 See the TypeScript definitions for complete API documentation. All major interfaces are exported:
@@ -342,3 +661,6 @@ See the TypeScript definitions for complete API documentation. All major interfa
 - `IResilientExecutor`
 - `IWorkflowOrchestrator`
 - `IWorkflowStorage`
+- `IAgentExecutor`
+- `IAgentAdapter`
+- `IApprovalService`
