@@ -11,6 +11,9 @@
 // Types and interfaces
 export * from "./types/index.js";
 
+// Profile system
+export * from "./profiles/index.js";
+
 // Agent registry
 export * from "./registry.js";
 
