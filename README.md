@@ -4,7 +4,7 @@ Generic execution engine for CLI agents with process management, resilience, and
 
 ## Overview
 
-This package provides a layered architecture for managing CLI agent execution with built-in resilience, concurrency control, and workflow orchestration. It's designed to be agent-agnostic and can work with any CLI tool (Claude Code, Aider, Gemini CLI, Codex, etc.).
+This package provides a layered architecture for managing CLI agent execution with built-in resilience, concurrency control, and workflow orchestration. It's designed to be agent-agnostic and can work with any CLI tool (Claude Code, Gemini CLI, Codex, etc.).
 
 ## Architecture
 
@@ -12,7 +12,7 @@ The execution engine consists of 4 core layers plus an agents layer:
 
 ```
 ┌─────────────────────────────────────┐
-│  Agents: CLI Agent Adapters         │  Claude Code, Aider, etc.
+│  Agents: CLI Agent Adapters         │  Claude Code, Codex, Gemini CLI, etc.
 ├─────────────────────────────────────┤
 │  Layer 4: Workflow Orchestration    │  Multi-step workflows, checkpointing
 ├─────────────────────────────────────┤
@@ -84,7 +84,7 @@ Agent-specific adapters for various CLI agents:
 - Agent-agnostic interface for building ProcessConfig
 - Metadata and capabilities declaration
 - Built-in support for Claude Code
-- Extensible for adding new agents (Aider, Gemini, Codex, etc.)
+- Extensible for adding new agents (Gemini, Codex, etc.)
 
 **Key exports:**
 - `IAgentAdapter` - Interface for creating agent adapters

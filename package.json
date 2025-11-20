@@ -33,6 +33,10 @@
     "./agents/claude": {
       "types": "./dist/agents/claude/index.d.ts",
       "default": "./dist/agents/claude/index.js"
+    },
+    "./agents/codex": {
+      "types": "./dist/agents/codex/index.d.ts",
+      "default": "./dist/agents/codex/index.js"
     }
   },
   "scripts": {
