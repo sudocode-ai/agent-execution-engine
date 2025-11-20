@@ -269,6 +269,113 @@ const engine = new SimpleExecutionEngine(processManager);
 // Now you can submit tasks...
 ```
 
+### Cursor Executor Example: Using Cursor CLI
+
+The Cursor executor provides a simpler integration approach using the unified `IAgentExecutor` interface:
+
+```typescript
+import { CursorExecutor } from 'agent-execution-engine/agents/cursor';
+import type { ExecutionTask } from 'agent-execution-engine';
+
+// Create Cursor executor with auto-approval
+const executor = new CursorExecutor({
+  force: true,        // Auto-approve all tool executions
+  model: 'auto',      // Use default model selection
+});
+
+// Check if cursor-agent is available
+if (!(await executor.checkAvailability())) {
+  console.error('cursor-agent not found. Install from: https://cursor.sh');
+  process.exit(1);
+}
+
+// Execute a task
+const task: ExecutionTask = {
+  id: 'task-1',
+  type: 'custom',
+  prompt: 'Add user authentication to the login page',
+  workDir: '/path/to/project',
+  config: {},
+};
+
+const spawned = await executor.executeTask(task);
+
+// Process normalized output
+const outputStream = executor.createOutputChunks(spawned.process);
+
+for await (const entry of executor.normalizeOutput(outputStream, task.workDir)) {
+  console.log(`[${entry.type.kind}]`, entry.content);
+
+  // Handle different entry types
+  switch (entry.type.kind) {
+    case 'system_message':
+      console.log('Session info:', entry.content);
+      break;
+    case 'tool_use':
+      if (entry.type.tool.status === 'success') {
+        console.log('Tool executed:', entry.type.tool.toolName);
+      }
+      break;
+    case 'assistant_message':
+      console.log('Assistant:', entry.content);
+      break;
+    case 'error':
+      console.error('Error:', entry.type.error);
+      break;
+  }
+}
+
+// Wait for process to complete
+await new Promise((resolve) => spawned.process.on('exit', resolve));
+```
+
+**Cursor Features:**
+- ✅ Simple JSONL protocol (easiest to integrate)
+- ✅ Auto-approval mode via `--force` flag
+- ✅ Session resumption support
+- ✅ 11 built-in tools (shell, read, write, edit, delete, ls, glob, grep, semsearch, todo, mcp)
+- ✅ MCP server integration for custom tools
+- ✅ Normalized output format for consistent UI rendering
+
+**Cursor Setup:**
+1. Install Cursor CLI: https://cursor.sh
+2. Authenticate: `cursor-agent login` or set `CURSOR_API_KEY` environment variable
+3. (Optional) Configure MCP servers in `~/.cursor/mcp.json`
+
+**Session Resumption:**
+
+```typescript
+// Execute initial task
+const spawned1 = await executor.executeTask({
+  id: 'task-1',
+  prompt: 'Start implementing login feature',
+  workDir: '/project',
+  config: {},
+});
+
+// Extract session ID from output
+let sessionId: string | undefined;
+const outputStream1 = executor.createOutputChunks(spawned1.process);
+
+for await (const entry of executor.normalizeOutput(outputStream1, '/project')) {
+  if (entry.type.kind === 'system_message' && entry.content.includes('Session:')) {
+    // Parse session ID from content
+    const match = entry.content.match(/Session: (sess-[a-z0-9]+)/);
+    if (match) sessionId = match[1];
+  }
+}
+
+// Resume with new prompt in same session
+if (sessionId) {
+  const spawned2 = await executor.resumeTask({
+    id: 'task-2',
+    prompt: 'Now add logout functionality',
+    workDir: '/project',
+    config: {},
+  }, sessionId);
+}
+```
+
 ### Agent Registry Example: Supporting Multiple Agents
 
 ```typescript
