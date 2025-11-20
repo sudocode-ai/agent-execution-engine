@@ -23,3 +23,4 @@ export * from "./registry.js";
 // Built-in agents
 export * from "./claude/index.js";
 export * from "./codex/index.js";
+export * from "./cursor/index.js";
