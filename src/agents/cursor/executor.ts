@@ -20,6 +20,8 @@ import type {
 } from '../types/agent-executor.js';
 import type { CursorConfig } from './types/config.js';
 import { normalizeOutput as cursorNormalizeOutput } from './normalizer/index.js';
+import { CursorExecutorError } from './errors.js';
+import { ensureMcpServerTrust } from './mcp/index.js';
 
 const exec = promisify(execCallback);
 
@@ -121,10 +123,16 @@ export class CursorExecutor extends BaseAgentExecutor {
     // Check availability first
     const available = await this.checkAvailability();
     if (!available) {
-      throw new Error(
-        'Cursor CLI not available. Install from: https://cursor.sh'
-      );
+      throw CursorExecutorError.notAvailable();
     }
+
+    // Validate task configuration
+    if (!task.workDir) {
+      throw CursorExecutorError.invalidConfig('workDir is required');
+    }
+
+    // Ensure MCP servers are trusted (non-blocking warning)
+    await ensureMcpServerTrust(task.workDir);
 
     // Build command arguments
     const args = this.buildArgs();
@@ -132,10 +140,20 @@ export class CursorExecutor extends BaseAgentExecutor {
     // Get executable path
     const executablePath = this.config.executablePath || 'cursor-agent';
 
-    // Spawn process
-    const child = spawn(executablePath, args, {
-      cwd: task.workDir,
-      stdio: ['pipe', 'pipe', 'pipe'],
+    // Spawn process with error handling
+    let child;
+    try {
+      child = spawn(executablePath, args, {
+        cwd: task.workDir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      throw CursorExecutorError.spawnFailed(err as Error);
+    }
+
+    // Handle spawn errors
+    child.on('error', (err) => {
+      throw CursorExecutorError.spawnFailed(err);
     });
 
     // Build full prompt
@@ -183,10 +201,21 @@ export class CursorExecutor extends BaseAgentExecutor {
     // Check availability first
     const available = await this.checkAvailability();
     if (!available) {
-      throw new Error(
-        'Cursor CLI not available. Install from: https://cursor.sh'
-      );
+      throw CursorExecutorError.notAvailable();
     }
+
+    // Validate task configuration
+    if (!task.workDir) {
+      throw CursorExecutorError.invalidConfig('workDir is required');
+    }
+
+    // Validate session ID
+    if (!sessionId || !sessionId.trim()) {
+      throw CursorExecutorError.invalidConfig('sessionId is required for resume');
+    }
+
+    // Ensure MCP servers are trusted (non-blocking warning)
+    await ensureMcpServerTrust(task.workDir);
 
     // Build command arguments with --resume flag
     const args = this.buildArgs(sessionId);
@@ -194,10 +223,20 @@ export class CursorExecutor extends BaseAgentExecutor {
     // Get executable path
     const executablePath = this.config.executablePath || 'cursor-agent';
 
-    // Spawn process
-    const child = spawn(executablePath, args, {
-      cwd: task.workDir,
-      stdio: ['pipe', 'pipe', 'pipe'],
+    // Spawn process with error handling
+    let child;
+    try {
+      child = spawn(executablePath, args, {
+        cwd: task.workDir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      throw CursorExecutorError.spawnFailed(err as Error);
+    }
+
+    // Handle spawn errors
+    child.on('error', (err) => {
+      throw CursorExecutorError.spawnFailed(err);
     });
 
     // Build full prompt

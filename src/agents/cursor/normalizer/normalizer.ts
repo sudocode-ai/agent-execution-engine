@@ -92,6 +92,38 @@ export async function* normalizeOutput(
 }
 
 /**
+ * Known authentication error message from Cursor CLI.
+ *
+ * This exact message indicates that the user needs to authenticate
+ * via `cursor-agent login` or set CURSOR_API_KEY.
+ */
+const AUTH_ERROR_MESSAGE =
+  "Authentication required. Please run 'cursor-agent login' first, or set CURSOR_API_KEY environment variable.";
+
+/**
+ * Detect if stderr contains an authentication error.
+ *
+ * Checks for both the exact auth error message and common auth-related keywords.
+ *
+ * @param stderr - Stderr text to check
+ * @returns True if authentication error detected
+ */
+function detectAuthError(stderr: string): boolean {
+  // Check for exact error message first
+  if (stderr.includes(AUTH_ERROR_MESSAGE)) {
+    return true;
+  }
+
+  // Check for auth-related keywords
+  return (
+    stderr.includes('authentication') ||
+    stderr.includes('login') ||
+    stderr.includes('CURSOR_API_KEY') ||
+    stderr.includes('not authenticated')
+  );
+}
+
+/**
  * Handle stderr output.
  *
  * Detects authentication errors and other stderr messages.
@@ -108,12 +140,7 @@ async function* handleStderr(
   const text = chunk.data.toString();
 
   // Detect authentication errors
-  if (
-    text.includes('authentication') ||
-    text.includes('login') ||
-    text.includes('CURSOR_API_KEY') ||
-    text.includes('not authenticated')
-  ) {
+  if (detectAuthError(text)) {
     yield {
       index: state.nextIndex(),
       timestamp: new Date(),

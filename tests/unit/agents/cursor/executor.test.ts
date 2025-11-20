@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CursorExecutor } from '@/agents/cursor/executor';
+import { CursorExecutorError } from '@/agents/cursor/errors';
 import type { ExecutionTask } from '@/agents/types/agent-executor';
 import type { ChildProcess } from 'child_process';
 
@@ -7,6 +8,11 @@ import type { ChildProcess } from 'child_process';
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
   exec: vi.fn(),
+}));
+
+// Mock MCP trust module
+vi.mock('@/agents/cursor/mcp/trust', () => ({
+  ensureMcpServerTrust: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CursorExecutor', () => {
@@ -173,12 +179,54 @@ describe('CursorExecutor', () => {
       expect(spawned.process.status).toBe('busy');
     });
 
-    it('should throw error if cursor-agent not available', async () => {
+    it('should throw CursorExecutorError if cursor-agent not available', async () => {
       vi.spyOn(executor, 'checkAvailability').mockResolvedValue(false);
 
       await expect(executor.executeTask(task)).rejects.toThrow(
+        CursorExecutorError
+      );
+      await expect(executor.executeTask(task)).rejects.toThrow(
         'Cursor CLI not available'
       );
+    });
+
+    it('should throw CursorExecutorError.notAvailable() with correct code', async () => {
+      vi.spyOn(executor, 'checkAvailability').mockResolvedValue(false);
+
+      try {
+        await executor.executeTask(task);
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CursorExecutorError);
+        if (err instanceof CursorExecutorError) {
+          expect(err.code).toBe('NOT_AVAILABLE');
+        }
+      }
+    });
+
+    it('should throw CursorExecutorError if workDir is missing', async () => {
+      const invalidTask = { ...task, workDir: '' };
+
+      try {
+        await executor.executeTask(invalidTask);
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CursorExecutorError);
+        if (err instanceof CursorExecutorError) {
+          expect(err.code).toBe('INVALID_CONFIG');
+          expect(err.message).toContain('workDir is required');
+        }
+      }
+    });
+
+    it('should call ensureMcpServerTrust before spawning', async () => {
+      const { ensureMcpServerTrust } = await import(
+        '@/agents/cursor/mcp/trust'
+      );
+
+      await executor.executeTask(task);
+
+      expect(ensureMcpServerTrust).toHaveBeenCalledWith(task.workDir);
     });
 
     it('should handle missing stdin gracefully', async () => {
@@ -261,12 +309,66 @@ describe('CursorExecutor', () => {
       expect(mockChildProcess.stdin?.end).toHaveBeenCalled();
     });
 
-    it('should throw error if cursor-agent not available', async () => {
+    it('should throw CursorExecutorError if cursor-agent not available', async () => {
       vi.spyOn(executor, 'checkAvailability').mockResolvedValue(false);
 
-      await expect(executor.resumeTask(task, 'sess-abc123')).rejects.toThrow(
-        'Cursor CLI not available'
+      await expect(
+        executor.resumeTask(task, 'sess-abc123')
+      ).rejects.toThrow(CursorExecutorError);
+      await expect(
+        executor.resumeTask(task, 'sess-abc123')
+      ).rejects.toThrow('Cursor CLI not available');
+    });
+
+    it('should throw CursorExecutorError if workDir is missing', async () => {
+      const invalidTask = { ...task, workDir: '' };
+
+      try {
+        await executor.resumeTask(invalidTask, 'sess-123');
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CursorExecutorError);
+        if (err instanceof CursorExecutorError) {
+          expect(err.code).toBe('INVALID_CONFIG');
+          expect(err.message).toContain('workDir is required');
+        }
+      }
+    });
+
+    it('should throw CursorExecutorError if sessionId is empty', async () => {
+      try {
+        await executor.resumeTask(task, '');
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CursorExecutorError);
+        if (err instanceof CursorExecutorError) {
+          expect(err.code).toBe('INVALID_CONFIG');
+          expect(err.message).toContain('sessionId is required');
+        }
+      }
+    });
+
+    it('should throw CursorExecutorError if sessionId is whitespace only', async () => {
+      try {
+        await executor.resumeTask(task, '   ');
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CursorExecutorError);
+        if (err instanceof CursorExecutorError) {
+          expect(err.code).toBe('INVALID_CONFIG');
+          expect(err.message).toContain('sessionId is required');
+        }
+      }
+    });
+
+    it('should call ensureMcpServerTrust before spawning', async () => {
+      const { ensureMcpServerTrust } = await import(
+        '@/agents/cursor/mcp/trust'
       );
+
+      await executor.resumeTask(task, 'sess-xyz');
+
+      expect(ensureMcpServerTrust).toHaveBeenCalledWith(task.workDir);
     });
   });
 
