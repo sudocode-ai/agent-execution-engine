@@ -54,3 +54,9 @@ export {
   type MessageHandler,
   type ErrorHandler as ProtocolErrorHandler,
 } from './protocol/index.js';
+
+// Normalizer
+export {
+  normalizeMessage,
+  createNormalizerState,
+} from './normalizer.js';

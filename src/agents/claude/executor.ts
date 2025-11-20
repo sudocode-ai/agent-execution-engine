@@ -7,9 +7,15 @@
  */
 
 import { spawn } from 'child_process';
+import { Readable } from 'stream';
 import { BaseAgentExecutor } from '../base/base-executor.js';
 import { ProtocolPeer } from './protocol/protocol-peer.js';
 import { ClaudeAgentClient } from './protocol/client.js';
+import {
+  normalizeMessage,
+  createNormalizerState,
+} from './normalizer.js';
+import { parseStreamJsonLine } from './protocol/utils.js';
 import type { ClaudeCodeConfig } from './types/config.js';
 import type { HookConfig } from './types/control.js';
 import type {
@@ -209,8 +215,6 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    *
    * Converts stream-json messages to normalized entries for UI rendering.
    *
-   * TODO: Implement in issue i-9i28
-   *
    * @param outputStream - Raw output chunks
    * @param workDir - Working directory
    * @returns Normalized entries
@@ -219,15 +223,40 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     outputStream: AsyncIterable<OutputChunk>,
     workDir: string
   ): AsyncIterable<NormalizedEntry> {
-    // Placeholder - will be implemented in i-9i28
-    let index = 0;
+    const state = createNormalizerState();
+    let buffer = '';
+
     for await (const chunk of outputStream) {
-      // For now, pass through as assistant messages
-      yield {
-        index: index++,
-        type: { kind: 'assistant_message' },
-        content: chunk.data.toString(),
-      };
+      // Accumulate chunks into buffer
+      buffer += chunk.data.toString();
+
+      // Split on newlines (stream-json is newline-delimited)
+      const lines = buffer.split('\n');
+
+      // Keep last incomplete line in buffer
+      buffer = lines.pop() || '';
+
+      // Process complete lines
+      for (const line of lines) {
+        const message = parseStreamJsonLine(line);
+        if (!message) continue;
+
+        const entry = normalizeMessage(message, workDir, state);
+        if (entry) {
+          yield entry;
+        }
+      }
+    }
+
+    // Process any remaining buffer
+    if (buffer.trim()) {
+      const message = parseStreamJsonLine(buffer);
+      if (message) {
+        const entry = normalizeMessage(message, workDir, state);
+        if (entry) {
+          yield entry;
+        }
+      }
     }
   }
 
