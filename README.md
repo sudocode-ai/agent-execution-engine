@@ -759,6 +759,159 @@ const workflow = {
 await orchestrator.startWorkflow(workflow, '/path/to/project');
 ```
 
+## Running Agent Examples
+
+The `examples/` directory contains working examples for each supported agent. These examples demonstrate real-world usage patterns and can be run directly.
+
+### Available Agents
+
+The execution engine currently supports the following agents:
+
+| Agent | Description | Protocol | Setup Required |
+|-------|-------------|----------|----------------|
+| **Claude Code** | Anthropic's official CLI | Stream JSON | Install `claude` CLI |
+| **Cursor** | Cursor CLI agent | JSONL | Install from cursor.sh |
+| **GitHub Copilot** | GitHub Copilot CLI | JSONL | Run `npx @github/copilot` |
+
+### Setup Instructions
+
+#### Claude Code
+
+1. Install the Claude CLI:
+   ```bash
+   npm install -g @anthropic/claude-cli
+   ```
+
+2. Authenticate:
+   ```bash
+   claude login
+   ```
+
+3. Verify installation:
+   ```bash
+   claude --version
+   ```
+
+#### Cursor
+
+1. Install Cursor from [cursor.sh](https://cursor.sh)
+
+2. Authenticate with API key:
+   ```bash
+   export CURSOR_API_KEY="your-api-key"
+   ```
+   Or use interactive login:
+   ```bash
+   cursor-agent login
+   ```
+
+3. (Optional) Configure MCP servers in `~/.cursor/mcp.json`
+
+#### GitHub Copilot
+
+1. Run Copilot CLI (installs automatically):
+   ```bash
+   npx -y @github/copilot
+   ```
+
+2. In the CLI, authenticate:
+   ```
+   /login
+   ```
+
+3. Follow the GitHub authentication flow
+
+4. Verify setup:
+   ```bash
+   ls ~/.copilot/mcp-config.json
+   ```
+
+### Running Examples
+
+All examples are TypeScript files that can be run with `tsx`:
+
+```bash
+# Install tsx globally (if not already installed)
+npm install -g tsx
+
+# Run an example
+tsx examples/copilot-basic.ts
+```
+
+#### Copilot Examples
+
+**Basic Usage** - Simple task execution with output processing:
+```bash
+tsx examples/copilot-basic.ts
+```
+
+**Session Resume** - Continue a conversation across multiple tasks:
+```bash
+tsx examples/copilot-session-resume.ts
+```
+
+**Multi-Directory** - Work with multiple project directories:
+```bash
+tsx examples/copilot-multi-directory.ts
+```
+
+**Workflow Integration** - Use Copilot with the workflow orchestrator:
+```bash
+tsx examples/copilot-with-workflow.ts
+```
+
+**Profile System** - Load agent configurations from profiles:
+```bash
+tsx examples/copilot-with-profiles.ts
+```
+
+### Building Custom Examples
+
+To create your own example, use this template:
+
+```typescript
+import { CopilotExecutor } from 'agent-execution-engine/agents/copilot';
+import type { ExecutionTask } from 'agent-execution-engine';
+
+async function main() {
+  // 1. Create executor
+  const executor = new CopilotExecutor({
+    workDir: process.cwd(),
+    model: 'gpt-4o',
+    allowAllTools: true,
+  });
+
+  // 2. Check availability
+  if (!(await executor.checkAvailability())) {
+    console.error('Agent not available');
+    process.exit(1);
+  }
+
+  // 3. Define task
+  const task: ExecutionTask = {
+    id: 'my-task',
+    type: 'custom',
+    prompt: 'Your prompt here',
+    workDir: process.cwd(),
+    config: {},
+  };
+
+  // 4. Execute and process output
+  const result = await executor.executeTask(task);
+
+  for await (const entry of executor.normalizeOutput(
+    result.process.streams!.stdout,
+    task.workDir
+  )) {
+    if (entry.type.kind === 'assistant_message') {
+      console.log(entry.content);
+    }
+  }
+}
+
+main().catch(console.error);
+```
+
 ## API Reference
 
 See the TypeScript definitions for complete API documentation. All major interfaces are exported:
@@ -771,3 +924,5 @@ See the TypeScript definitions for complete API documentation. All major interfa
 - `IAgentExecutor`
 - `IAgentAdapter`
 - `IApprovalService`
+
+This repository takes inspiration from the agent execution logic in [vibe-kanban](https://github.com/BloopAI/vibe-kanban).
