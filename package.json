@@ -72,8 +72,10 @@
     "LICENSE"
   ],
   "dependencies": {
-    "node-pty": "^1.0.0",
     "strip-ansi": "^7.1.2"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",
