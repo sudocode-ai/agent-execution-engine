@@ -1,0 +1,23 @@
+/**
+ * Cursor Output Normalizer
+ *
+ * @module agents/cursor/normalizer
+ */
+
+export { CursorNormalizationState } from './state.js';
+export { normalizeOutput } from './normalizer.js';
+export {
+  mapToolToAction,
+  mapToolToActionWithResult,
+  makePathRelative,
+} from './mappers.js';
+export type { ToolMapping } from './mappers.js';
+export {
+  extractUnifiedDiffHunks,
+  concatenateDiffHunks,
+  createUnifiedDiff,
+  createUnifiedDiffHunk,
+  extractEditChanges,
+  extractResultDiff,
+  isValidUnifiedDiff,
+} from './diff-utils.js';

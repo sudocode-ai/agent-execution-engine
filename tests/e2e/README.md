@@ -52,30 +52,53 @@ RUN_E2E_TESTS=true CLAUDE_PATH=/path/to/claude npm run test:e2e
 
 ## What Gets Tested
 
-### 1. Structured Mode (JSON Output)
-- Simple task execution with stream-json output
-- Resilience layer integration (retry logic)
-- Multi-step workflow execution
+### Legacy Tests (`claude-execution.test.ts`)
 
-### 2. Interactive Mode (PTY)
-- Full terminal emulation
-- Interactive task execution
+Tests the older ClaudeCodeAdapter with process management layers:
 
-### 3. Hybrid Mode (PTY + JSON)
-- Combined terminal and structured output
-- Dual-mode execution
+1. **Structured Mode (JSON Output)**
+   - Simple task execution with stream-json output
+   - Resilience layer integration (retry logic)
+   - Multi-step workflow execution
 
-### 4. Agent Adapter
-- Configuration validation
-- Config building
-- Default values
+2. **Agent Adapter**
+   - Configuration validation
+   - Config building
+   - Default values
+
+### New Executor Tests (`claude-executor.test.ts`)
+
+Tests the new ClaudeCodeExecutor implementation:
+
+1. **Basic Task Execution**
+   - Stream-json output reception
+   - Tool execution with approval flow
+   - Real bidirectional protocol
+
+2. **Output Normalization**
+   - Real Claude output → NormalizedEntry format
+   - Message coalescing for streaming responses
+   - Tool use parsing
+
+3. **Session Management**
+   - Session ID extraction
+   - Session resumption with `--resume-session`
+
+4. **Error Handling**
+   - Process termination
+   - Graceful cleanup
+
+5. **Capabilities**
+   - Capability reporting
+   - Availability checking
 
 ## Test Duration
 
 E2E tests spawn real AI processes, so they are **significantly slower** than unit/integration tests:
 
-- **Unit/Integration tests**: ~50 seconds (418+ tests)
-- **E2E tests**: ~3-5 minutes (8 tests with real Claude Code)
+- **Unit/Integration tests**: ~50 seconds (748+ tests)
+- **Legacy E2E tests** (`claude-execution.test.ts`): ~3-5 minutes (5 tests with real Claude Code)
+- **New Executor E2E tests** (`claude-executor.test.ts`): ~5-7 minutes (10 tests with real Claude CLI)
 
 ## CI/CD Considerations
 

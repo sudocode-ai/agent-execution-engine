@@ -7,7 +7,6 @@
  * @module execution/process/pty-manager
  */
 
-import * as pty from 'node-pty';
 import type { IProcessManager } from './manager.js';
 import type {
   ProcessConfig,
@@ -17,6 +16,26 @@ import type {
   ErrorHandler,
 } from './types.js';
 import { generateId } from './utils.js';
+
+// Lazy-load node-pty since it's an optional dependency
+let ptyModule: typeof import('node-pty') | null = null;
+
+async function loadPty(): Promise<typeof import('node-pty')> {
+  if (ptyModule) {
+    return ptyModule;
+  }
+
+  try {
+    ptyModule = await import('node-pty');
+    return ptyModule;
+  } catch (error) {
+    throw new Error(
+      'node-pty is required for interactive and hybrid execution modes.\n' +
+      'Install it with: npm install node-pty\n' +
+      'Note: node-pty requires build tools (Python, C++ compiler) to be installed.'
+    );
+  }
+}
 
 /**
  * Process manager using PTY for interactive terminal execution
@@ -70,6 +89,9 @@ export class PtyProcessManager implements IProcessManager {
 
   async acquireProcess(config: ProcessConfig): Promise<ManagedPtyProcess> {
     const id = generateId('pty');
+
+    // Load node-pty module (throws if not available)
+    const pty = await loadPty();
 
     // Default terminal config
     const terminalConfig = {

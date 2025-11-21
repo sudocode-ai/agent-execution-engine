@@ -7,3 +7,4 @@
  */
 
 export * from './agent-adapter.js';
+export * from './agent-executor.js';

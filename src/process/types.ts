@@ -128,12 +128,25 @@ export interface ManagedProcess {
 }
 
 /**
+ * PTY process interface (lightweight version to avoid hard dependency on node-pty)
+ * Mirrors the essential parts of node-pty's IPty interface
+ */
+export interface IPtyProcess {
+  readonly pid: number;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  onData(callback: (data: string) => void): void;
+  onExit(callback: (e: { exitCode: number; signal?: number }) => void): void;
+  kill(signal?: string): void;
+}
+
+/**
  * PTY-specific process interface for interactive terminal execution
  * Extends ManagedProcess with PTY-specific methods and properties
  */
 export interface ManagedPtyProcess extends Omit<ManagedProcess, 'process' | 'streams'> {
   /** PTY process instance */
-  ptyProcess: import('node-pty').IPty;
+  ptyProcess: IPtyProcess;
 
   /** Write data to PTY */
   write: (data: string) => void;
