@@ -37,6 +37,10 @@
     "./agents/codex": {
       "types": "./dist/agents/codex/index.d.ts",
       "default": "./dist/agents/codex/index.js"
+    },
+    "./agents/acp": {
+      "types": "./dist/agents/acp/index.d.ts",
+      "default": "./dist/agents/acp/index.js"
     }
   },
   "scripts": {
@@ -72,6 +76,7 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.5.1",
     "strip-ansi": "^7.1.2"
   },
   "optionalDependencies": {

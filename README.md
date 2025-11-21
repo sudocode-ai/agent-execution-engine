@@ -94,6 +94,12 @@ Multi-step workflow execution:
    - Interactive approval service support
    - Session management and resumption
 
+3. **ACP (Agent Client Protocol) Integration** - For Gemini CLI and other ACP agents
+   - TypeScript types and utilities for ACP protocol
+   - Uses official `@agentclientprotocol/sdk` for communication
+   - Event helpers for normalizing ACP events
+   - See `src/agents/acp/README.md` for details
+
 **Key exports:**
 - `IAgentAdapter` - Interface for creating agent adapters (simple approach)
 - `ClaudeCodeAdapter` - Built-in Claude Code adapter
@@ -102,6 +108,7 @@ Multi-step workflow execution:
 - `BaseAgentExecutor` - Abstract base class for custom executors
 - `AgentProfileRegistry` - Profile-based configuration system
 - `IApprovalService` - Interactive tool approval interface
+- **ACP exports:** `Client`, `AcpEvent`, `sessionUpdateToEvent`, `toNormalizedEntry` (from `agent-execution-engine/agents/acp`)
 
 ## Installation
 
