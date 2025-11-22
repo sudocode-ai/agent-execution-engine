@@ -777,6 +777,7 @@ The execution engine currently supports the following agents:
 | Agent | Description | Protocol | Setup Required |
 |-------|-------------|----------|----------------|
 | **Claude Code** | Anthropic's official CLI | Stream JSON | Install `claude` CLI |
+| **Gemini CLI** | Google's Gemini AI CLI | ACP | Install `@google/gemini-cli` |
 | **Cursor** | Cursor CLI agent | JSONL | Install from cursor.sh |
 | **GitHub Copilot** | GitHub Copilot CLI | JSONL | Run `npx @github/copilot` |
 
@@ -798,6 +799,84 @@ The execution engine currently supports the following agents:
    ```bash
    claude --version
    ```
+
+#### Gemini CLI
+
+1. Install the Gemini CLI:
+   ```bash
+   npx -y @google/gemini-cli --version
+   ```
+
+2. Authenticate:
+   ```bash
+   npx @google/gemini-cli login
+   ```
+
+3. Test the connection:
+   ```bash
+   echo "Hello!" | npx @google/gemini-cli --experimental-acp
+   ```
+
+4. (Optional) Install globally for faster access:
+   ```bash
+   npm install -g @google/gemini-cli
+   ```
+
+**Key Features:**
+- **ACP Protocol**: Uses Agent Client Protocol for communication
+- **Session Persistence**: Automatic conversation history with session resumption
+- **Model Selection**: Choose between default, flash, or experimental thinking models
+- **Auto-Approval**: Optional auto-approval mode for tool requests
+- **MCP Support**: Integration with Model Context Protocol servers
+
+**Basic Usage:**
+```typescript
+import { GeminiExecutor } from 'agent-execution-engine/agents/gemini';
+
+const executor = new GeminiExecutor({
+  workDir: '/path/to/project',
+  model: 'flash',          // 'default' | 'flash' | 'gemini-2.5-flash-thinking-exp-01-21'
+  autoApprove: true,       // Auto-approve tool requests
+  sessionNamespace: 'my-sessions', // Optional custom namespace
+  systemPrompt: 'You are a helpful coding assistant.', // Optional
+});
+
+// Execute task
+const spawned = await executor.executeTask({
+  id: 'task-1',
+  type: 'custom',
+  prompt: 'Add authentication to the API',
+  workDir: '/path/to/project',
+  priority: 0,
+  dependencies: [],
+  createdAt: new Date(),
+  config: {},
+});
+
+// Wait for completion
+await spawned.exitSignal;
+```
+
+**Session Resumption:**
+```typescript
+// First task
+const spawned1 = await executor.executeTask({
+  id: 'task-1',
+  prompt: 'Create a user model',
+  workDir: '/path/to/project',
+  // ...
+});
+
+const sessionId = spawned1.sessionInfo.sessionId;
+
+// Resume session
+const spawned2 = await executor.resumeTask({
+  id: 'task-2',
+  prompt: 'Now add password hashing',
+  workDir: '/path/to/project',
+  // ...
+}, sessionId);
+```
 
 #### Cursor
 
