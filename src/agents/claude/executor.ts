@@ -307,9 +307,9 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     const outputFormat = this.config.outputFormat || 'stream-json';
     args.push('--output-format', outputFormat);
 
-    // Input format
-    const inputFormat = this.config.inputFormat || 'stream-json';
-    args.push('--input-format', inputFormat);
+    // NOTE: We do NOT specify --input-format because we use the SDK control protocol
+    // via ProtocolPeer, which sends sdk_control_request messages. Specifying
+    // --input-format=stream-json would cause a protocol mismatch.
 
     // Permission prompts via stdio (required for approval protocol)
     args.push('--permission-prompt-tool', 'stdio');
