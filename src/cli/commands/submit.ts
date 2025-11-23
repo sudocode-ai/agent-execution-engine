@@ -120,6 +120,99 @@ async function streamOutput(
 }
 
 /**
+ * Stream output from Claude protocol peer and render to console
+ */
+async function streamOutputFromPeer(
+  executor: ClaudeCodeExecutor,
+  peer: any, // ProtocolPeer type
+  workDir: string,
+  tracker: StateTracker,
+  options: SubmitOptions,
+): Promise<void> {
+  const isPretty = options.outputFormat !== 'json';
+  const showThinking = options.showThinking ?? true;
+  const showTimestamps = options.showTimestamps ?? false;
+
+  // Create a queue to buffer messages from the peer
+  const messageQueue: any[] = [];
+  let streamEnded = false;
+  let exitDetected = false;
+
+  // Register message handler to capture messages from peer
+  peer.onMessage((message: any) => {
+    messageQueue.push(message);
+
+    // Detect result/success or result/failure messages (completion)
+    if (message.type === 'result' && (message.subtype === 'success' || message.subtype === 'failure')) {
+      exitDetected = true;
+    }
+  });
+
+  try {
+    // Convert peer messages to OutputChunk format
+    async function* convertPeerMessagesToOutputChunks(): AsyncIterable<{
+      type: 'stdout' | 'stderr';
+      data: Buffer;
+      timestamp: Date;
+    }> {
+      // Keep processing until we've seen the exit message AND processed all queued messages
+      while (!streamEnded || messageQueue.length > 0) {
+        // Wait for messages to arrive
+        if (messageQueue.length === 0) {
+          if (exitDetected) {
+            // No more messages and we've seen the exit - we're done
+            streamEnded = true;
+            break;
+          }
+          // Wait a bit for more messages
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          continue;
+        }
+
+        // Process next message
+        const message = messageQueue.shift();
+
+        // Convert message to stream-json line format (what Claude outputs)
+        const line = JSON.stringify(message) + '\n';
+
+        yield {
+          type: 'stdout',
+          data: Buffer.from(line, 'utf-8'),
+          timestamp: new Date(),
+        };
+      }
+    }
+
+    for await (const entry of executor.normalizeOutput(
+      convertPeerMessagesToOutputChunks(),
+      workDir,
+    )) {
+      // Add entry to tracker
+      tracker.addEntry(entry);
+
+      // Render entry (pretty mode only)
+      if (isPretty) {
+        const rendered = renderEntry(entry, {
+          showThinking,
+          showTimestamps,
+          useColors: true,
+        });
+        if (rendered) {
+          console.log(rendered);
+        }
+      }
+    }
+  } catch (error) {
+    // Output stream error - this is expected when process exits
+    if (error instanceof Error && !error.message.includes('closed')) {
+      throw error;
+    }
+  } finally {
+    streamEnded = true;
+  }
+}
+
+/**
  * Wait for process to exit
  */
 async function waitForExit(
@@ -225,15 +318,27 @@ export async function submitCommand(options: SubmitOptions): Promise<SubmitResul
     }
 
     // 9. Follow mode: stream output
-    const outputStream = spawned.process.streams?.stdout;
-    if (!outputStream) {
-      throw new Error('No output stream available from spawned process');
-    }
+    // Check if this is a Claude executor with a peer (stream-json protocol)
+    const peer = (spawned.process as any).peer;
 
-    await streamOutput(executor, outputStream, workDir, tracker, {
-      ...options,
-      outputFormat,
-    });
+    if (peer) {
+      // Claude-specific: use peer messages instead of raw stdout
+      await streamOutputFromPeer(executor, peer, workDir, tracker, {
+        ...options,
+        outputFormat,
+      });
+    } else {
+      // Other agents: use raw stdout stream
+      const outputStream = spawned.process.streams?.stdout;
+      if (!outputStream) {
+        throw new Error('No output stream available from spawned process');
+      }
+
+      await streamOutput(executor, outputStream, workDir, tracker, {
+        ...options,
+        outputFormat,
+      });
+    }
 
     // 10. Wait for completion
     const { exitCode, success } = await waitForExit(processId, spawned.exitSignal);
