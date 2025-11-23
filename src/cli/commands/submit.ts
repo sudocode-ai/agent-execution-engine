@@ -6,7 +6,12 @@
 
 import { existsSync } from 'fs';
 import { resolve } from 'path';
-import { ClaudeCodeExecutor } from '../../agents/claude/executor.js';
+import {
+  createAgentExecutor,
+  isAgentAvailable,
+  type AgentName,
+} from '../../agents/factory.js';
+import type { IAgentExecutor } from '../../agents/types/agent-executor.js';
 import { ShutdownManager } from '../lifecycle/shutdown.js';
 import { setupSignalHandlers } from '../lifecycle/signals.js';
 import { StateTracker } from '../state/tracker.js';
@@ -40,10 +45,10 @@ function validateSubmitOptions(options: SubmitOptions): void {
     throw new Error(`Working directory does not exist: ${workDir}`);
   }
 
-  // Only claude is supported in Phase 1
-  if (options.agent !== 'claude') {
+  // Validate agent is available
+  if (!isAgentAvailable(options.agent)) {
     throw new Error(
-      `Agent "${options.agent}" is not supported. Phase 1 MVP only supports: claude`,
+      `Agent "${options.agent}" is not available. Currently supported: claude, cursor, copilot`,
     );
   }
 }
@@ -51,24 +56,82 @@ function validateSubmitOptions(options: SubmitOptions): void {
 /**
  * Create agent executor for the specified agent
  */
-function createExecutor(agent: string, workDir: string) {
-  if (agent === 'claude') {
-    return new ClaudeCodeExecutor({
-      workDir,
-      print: true,
-      outputFormat: 'stream-json',
-      dangerouslySkipPermissions: true, // MVP: auto-approve
-    });
-  }
+function createExecutor(agent: string, workDir: string, options: SubmitOptions): IAgentExecutor {
+  // Use factory to create executor based on agent name
+  switch (agent) {
+    case 'claude':
+      return createAgentExecutor('claude', {
+        workDir,
+        print: true,
+        outputFormat: 'stream-json',
+        dangerouslySkipPermissions: options.force ?? true, // MVP: auto-approve by default
+        // Note: Claude Code doesn't support model selection via CLI
+      });
 
-  throw new Error(`Unsupported agent: ${agent}`);
+    case 'cursor':
+      return createAgentExecutor('cursor', {
+        force: options.force ?? true, // Auto-approve all tools
+        model: options.model || 'auto',
+      });
+
+    case 'copilot':
+      return createAgentExecutor('copilot', {
+        workDir,
+        allowAllTools: options.force ?? true, // Auto-approve all tools
+      });
+
+    case 'codex':
+      return createAgentExecutor('codex', {
+        workDir,
+        model: options.model,
+        autoApprove: options.force ?? true, // Auto-approve all tools
+      });
+
+    default:
+      throw new Error(`Unsupported agent: ${agent}`);
+  }
+}
+
+/**
+ * Stream agent output with automatic protocol detection
+ *
+ * Detects the agent's protocol type and uses the appropriate streaming strategy:
+ * - ProtocolPeer (Claude stream-json): Use peer message handler
+ * - ACP Harness (Gemini): Use harness stream (future)
+ * - Raw stdout: Use standard stream processing
+ */
+async function streamAgentOutput(
+  executor: IAgentExecutor,
+  process: any, // ManagedProcess with possible extensions
+  workDir: string,
+  tracker: StateTracker,
+  options: SubmitOptions,
+): Promise<void> {
+  // Protocol detection: Check for special protocol handlers
+  const peer = process.peer; // Claude ProtocolPeer
+  const harness = process.harness; // Gemini ACP Harness (future)
+
+  if (peer) {
+    // Claude-specific: use peer messages instead of raw stdout
+    await streamOutputFromPeer(executor, peer, workDir, tracker, options);
+  } else if (harness) {
+    // Gemini-specific: use ACP harness (future implementation)
+    throw new Error('ACP Harness protocol not yet implemented');
+  } else {
+    // Standard: use raw stdout stream
+    const outputStream = process.streams?.stdout;
+    if (!outputStream) {
+      throw new Error('No output stream available from spawned process');
+    }
+    await streamOutput(executor, outputStream, workDir, tracker, options);
+  }
 }
 
 /**
  * Stream output from agent and render to console
  */
 async function streamOutput(
-  executor: ClaudeCodeExecutor,
+  executor: IAgentExecutor,
   outputStream: AsyncIterable<Buffer>,
   workDir: string,
   tracker: StateTracker,
@@ -123,7 +186,7 @@ async function streamOutput(
  * Stream output from Claude protocol peer and render to console
  */
 async function streamOutputFromPeer(
-  executor: ClaudeCodeExecutor,
+  executor: IAgentExecutor,
   peer: any, // ProtocolPeer type
   workDir: string,
   tracker: StateTracker,
@@ -249,7 +312,7 @@ export async function submitCommand(options: SubmitOptions): Promise<SubmitResul
   const outputFormat = options.outputFormat ?? 'pretty';
 
   // 2. Initialize executor
-  const executor = createExecutor(options.agent, workDir);
+  const executor = createExecutor(options.agent, workDir, options);
 
   // 3. Create task
   const taskId = generateId('task');
@@ -317,28 +380,11 @@ export async function submitCommand(options: SubmitOptions): Promise<SubmitResul
       };
     }
 
-    // 9. Follow mode: stream output
-    // Check if this is a Claude executor with a peer (stream-json protocol)
-    const peer = (spawned.process as any).peer;
-
-    if (peer) {
-      // Claude-specific: use peer messages instead of raw stdout
-      await streamOutputFromPeer(executor, peer, workDir, tracker, {
-        ...options,
-        outputFormat,
-      });
-    } else {
-      // Other agents: use raw stdout stream
-      const outputStream = spawned.process.streams?.stdout;
-      if (!outputStream) {
-        throw new Error('No output stream available from spawned process');
-      }
-
-      await streamOutput(executor, outputStream, workDir, tracker, {
-        ...options,
-        outputFormat,
-      });
-    }
+    // 9. Follow mode: stream output using unified function
+    await streamAgentOutput(executor, spawned.process, workDir, tracker, {
+      ...options,
+      outputFormat,
+    });
 
     // 10. Wait for completion
     const { exitCode, success } = await waitForExit(processId, spawned.exitSignal);
@@ -423,7 +469,7 @@ export function registerSubmitCommand(program: any): void {
   program
     .command('submit')
     .description('Submit a task to an agent and stream output')
-    .requiredOption('--agent <name>', 'Agent to use (e.g., claude)')
+    .requiredOption('--agent <name>', 'Agent to use (claude, cursor, copilot, codex)')
     .requiredOption('--prompt <text>', 'Task prompt to submit')
     .requiredOption('--workDir <path>', 'Working directory for the agent')
     .option('--detach', 'Detach mode: return task/process IDs immediately', false)
@@ -434,6 +480,9 @@ export function registerSubmitCommand(program: any): void {
     )
     .option('--show-thinking', 'Show thinking entries', true)
     .option('--show-timestamps', 'Show timestamps', false)
+    .option('--model <model>', 'Model to use (e.g., claude-3-opus, cursor-small)')
+    .option('--force', 'Auto-approve all tool executions (default: true)', true)
+    .option('--mcp-servers <servers>', 'Comma-separated list of MCP servers to enable')
     .action(async (options: SubmitOptions) => {
       try {
         const result = await submitCommand(options);

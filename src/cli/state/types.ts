@@ -59,6 +59,17 @@ export interface SubmitOptions {
 
   /** Show timestamps (default: false) */
   showTimestamps?: boolean;
+
+  // Agent-specific options
+
+  /** Model selection (for agents that support it, e.g., Cursor, Claude) */
+  model?: string;
+
+  /** Auto-approve all tool executions (default: true for MVP) */
+  force?: boolean;
+
+  /** MCP servers to enable (comma-separated list) */
+  mcpServers?: string;
 }
 
 /**

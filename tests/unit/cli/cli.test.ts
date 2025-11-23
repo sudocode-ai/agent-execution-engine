@@ -62,11 +62,11 @@ describe('Submit Command', () => {
       expect(workDirOption?.description).toContain('Working directory');
     });
 
-    it('should have --follow option with default true', () => {
+    it('should have --model option (optional)', () => {
       const options = submitCommand.options;
-      const followOption = options.find((opt) => opt.long === '--follow');
-      expect(followOption).toBeDefined();
-      expect(followOption?.defaultValue).toBe(true);
+      const modelOption = options.find((opt) => opt.long === '--model');
+      expect(modelOption).toBeDefined();
+      expect(modelOption?.mandatory).toBe(false);
     });
 
     it('should have --detach option with default false', () => {
@@ -83,11 +83,11 @@ describe('Submit Command', () => {
       expect(formatOption?.defaultValue).toBe('pretty');
     });
 
-    it('should have --resume option', () => {
+    it('should have --force option with default true', () => {
       const options = submitCommand.options;
-      const resumeOption = options.find((opt) => opt.long === '--resume');
-      expect(resumeOption).toBeDefined();
-      expect(resumeOption?.description).toContain('Resume');
+      const forceOption = options.find((opt) => opt.long === '--force');
+      expect(forceOption).toBeDefined();
+      expect(forceOption?.defaultValue).toBe(true);
     });
   });
 

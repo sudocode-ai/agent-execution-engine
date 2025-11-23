@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { registerSubmitCommand } from './commands/submit.js';
+import { registerListCommand } from './commands/list.js';
 
 // Get package.json for version
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +23,7 @@ program
 
 // Register commands
 registerSubmitCommand(program);
+registerListCommand(program);
 
 // Global error handler
 program.configureOutput({

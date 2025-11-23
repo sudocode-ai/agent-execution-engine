@@ -5,4 +5,6 @@
  */
 
 export { CodexAdapter } from './adapter.js';
-export { buildCodexConfig, type CodexConfig } from './config-builder.js';
+export { buildCodexConfig, type CodexConfig as CodexProcessConfig } from './config-builder.js';
+export { CodexExecutor } from './executor.js';
+export { type CodexConfig } from './types/config.js';
