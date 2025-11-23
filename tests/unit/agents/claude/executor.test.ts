@@ -107,6 +107,7 @@ describe('ClaudeCodeExecutor', () => {
       expect(args).toContain('--print');
       expect(args).toContain('--output-format');
       expect(args).toContain('stream-json');
+      // NOTE: --input-format stream-json is included for bidirectional protocol
       expect(args).toContain('--input-format');
       expect(args).toContain('--permission-prompt-tool');
       expect(args).toContain('stdio');

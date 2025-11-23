@@ -1,10 +1,13 @@
 {
   "name": "agent-execution-engine",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Generic execution engine for CLI agents with process management, resilience, and workflow orchestration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "bin": {
+    "aee-debug": "./dist/cli/index.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -37,6 +40,10 @@
     "./agents/codex": {
       "types": "./dist/agents/codex/index.d.ts",
       "default": "./dist/agents/codex/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "default": "./dist/cli/index.js"
     }
   },
   "scripts": {
@@ -72,7 +79,10 @@
     "LICENSE"
   ],
   "dependencies": {
-    "strip-ansi": "^7.1.2"
+    "strip-ansi": "^7.1.2",
+    "boxen": "^8.0.1",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2"
   },
   "optionalDependencies": {
     "node-pty": "^1.0.0"

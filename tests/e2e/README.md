@@ -214,3 +214,82 @@ Skip E2E tests when:
 - ⏭️ Testing non-execution code (types, utils)
 - ⏭️ In PRs (let CI handle it)
 - ⏭️ When Claude CLI is not available
+
+## Multi-Agent Tests
+
+### `multi-agent.test.ts` - Comprehensive Multi-Agent Support
+
+Tests all supported agents (Claude, Cursor, Copilot, Codex) with the CLI submit command.
+
+**Test Coverage:**
+
+1. **Agent Discovery**
+   - List all available agents
+   - Output in table and JSON formats
+
+2. **Per-Agent Tests** (for each of Claude, Cursor, Copilot)
+   - Simple task execution ("What is 2+2?")
+   - JSON output format
+   - Force flag for auto-approval
+   - Model selection (for supporting agents only)
+   - Error handling (invalid workDir)
+
+3. **Cross-Agent Consistency**
+   - Verify all agents return same output structure
+   - Test same task across all available agents
+
+4. **Agent-Specific Features**
+   - Model flag support (Cursor only)
+   - Graceful handling of unsupported flags
+
+5. **Error Handling**
+   - Reject unsupported agent names
+   - Validate required parameters
+
+**Running Multi-Agent Tests:**
+
+```bash
+# Run with Claude only (default)
+RUN_E2E_TESTS=true npm test -- tests/e2e/multi-agent.test.ts
+
+# Run with all agents (specify paths)
+RUN_E2E_TESTS=true \
+  CLAUDE_PATH=/path/to/claude \
+  CURSOR_PATH=/path/to/cursor \
+  COPILOT_PATH=/path/to/copilot \
+  npm test -- tests/e2e/multi-agent.test.ts
+
+# Run specific agent tests
+RUN_E2E_TESTS=true npm test -- tests/e2e/multi-agent.test.ts --testNamePattern="Claude"
+```
+
+**Expected Output:**
+
+```
+📋 Agent Availability:
+   ✅ Claude Code (claude): Available
+   ❌ Cursor (cursor): Not found at cursor-agent
+   ❌ GitHub Copilot (copilot): Not found at copilot
+   ❌ Codex (codex): Not found at codex
+
+ ✓ Multi-Agent Support E2E > Agent Discovery > should list all available agents
+ ✓ Multi-Agent Support E2E > Agent Discovery > should output agent list in JSON format
+ ✓ Multi-Agent Support E2E > Claude Agent > should execute simple task
+ ✓ Multi-Agent Support E2E > Claude Agent > should handle JSON output format
+ ✓ Multi-Agent Support E2E > Claude Agent > should handle force flag for auto-approval
+ ✓ Multi-Agent Support E2E > Claude Agent > should handle errors gracefully
+```
+
+**Test Duration:**
+- With 1 agent: ~5-7 minutes
+- With 3 agents: ~15-20 minutes
+- Cross-agent consistency test: +3 minutes per agent
+
+**Agent-Specific Notes:**
+
+| Agent      | Model Selection | Auto-Approval | Session Resumption | CLI Command      |
+|------------|-----------------|---------------|-------------------|------------------|
+| Claude     | ❌              | ✅ `--force`  | ✅ `--resume`     | `claude`         |
+| Cursor     | ✅ `--model`    | ✅ `--force`  | ❌                | `cursor-agent`   |
+| Copilot    | ❌              | ✅ `--force`  | ❌                | `copilot`        |
+| Codex      | ✅ `--model`    | ✅ `--force`  | ✅ `--resume`     | `codex` (future) |

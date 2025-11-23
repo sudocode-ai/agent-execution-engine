@@ -20,6 +20,9 @@ export * from "./profiles/index.js";
 // Agent registry
 export * from "./registry.js";
 
+// Agent executor factory
+export * from "./factory.js";
+
 // Built-in agents
 export * from "./claude/index.js";
 export * from "./codex/index.js";

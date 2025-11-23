@@ -68,9 +68,11 @@ export interface ClaudeCodeConfig {
   /**
    * Input format
    *
-   * Format for sending messages to Claude CLI stdin.
+   * @deprecated This field is no longer used. The executor uses the SDK control
+   * protocol via ProtocolPeer, which sends sdk_control_request messages.
+   * Specifying --input-format would cause a protocol mismatch.
    *
-   * @default 'stream-json'
+   * This field is kept for backward compatibility but has no effect.
    */
   inputFormat?: 'stream-json';
 

@@ -25,6 +25,14 @@ import type {
   NormalizedEntry,
 } from '../types/agent-executor.js';
 import type { ExecutionTask } from '../../engine/types.js';
+import type { ManagedProcess } from '../../process/types.js';
+
+/**
+ * Extended ManagedProcess with Claude-specific peer property
+ */
+interface ClaudeManagedProcess extends ManagedProcess {
+  peer?: ProtocolPeer;
+}
 
 /**
  * Claude Code Executor
@@ -76,7 +84,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    * and sends the initial prompt.
    *
    * @param task - Task to execute
-   * @returns Spawned process
+   * @returns Spawned process with protocol peer
    */
   async executeTask(task: ExecutionTask): Promise<SpawnedChild> {
     const args = this.buildArgs(false);
@@ -106,35 +114,41 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     // Start reading messages
     peer.start();
 
-    // Initialize protocol with hooks
-    await peer.initialize(hooks);
+    // NOTE: When using --input-format=stream-json, Claude CLI expects only
+    // 'user' and 'control' messages, NOT 'sdk_control_request' messages.
+    // So we skip the initialize step and just send the user message directly.
+    // The SDK control protocol (with initialize) is only used when NOT specifying --input-format.
 
-    // Send user message
+    // Send user message (no initialization needed for stream-json input)
     await peer.sendUserMessage(task.prompt);
 
-    // Return spawned child
+    // Return spawned child with peer attached
     const now = new Date();
-    return {
-      process: {
-        id: `claude-${Date.now()}`,
-        pid: childProcess.pid!,
-        status: 'busy',
-        spawnedAt: now,
-        lastActivity: now,
-        exitCode: null,
-        signal: null,
-        process: childProcess,
-        streams: {
-          stdin: childProcess.stdin!,
-          stdout: childProcess.stdout!,
-          stderr: childProcess.stderr!,
-        },
-        metrics: {
-          totalDuration: 0,
-          tasksCompleted: 0,
-          successRate: 0,
-        },
+    const claudeProcess: ClaudeManagedProcess = {
+      id: `claude-${Date.now()}`,
+      pid: childProcess.pid!,
+      status: 'busy',
+      spawnedAt: now,
+      lastActivity: now,
+      exitCode: null,
+      signal: null,
+      process: childProcess,
+      streams: {
+        stdin: childProcess.stdin!,
+        stdout: childProcess.stdout!,
+        stderr: childProcess.stderr!,
       },
+      metrics: {
+        totalDuration: 0,
+        tasksCompleted: 0,
+        successRate: 0,
+      },
+      // Attach peer for message handling
+      peer,
+    };
+
+    return {
+      process: claudeProcess,
     };
   }
 
@@ -145,7 +159,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    *
    * @param task - Task to execute
    * @param sessionId - Previous session ID
-   * @returns Spawned process
+   * @returns Spawned process with protocol peer
    */
   async resumeTask(
     task: ExecutionTask,
@@ -178,35 +192,40 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     // Start reading messages
     peer.start();
 
-    // Initialize protocol with hooks
-    await peer.initialize(hooks);
+    // NOTE: When using --input-format=stream-json, Claude CLI expects only
+    // 'user' and 'control' messages, NOT 'sdk_control_request' messages.
+    // So we skip the initialize step and just send the user message directly.
 
-    // Send user message
+    // Send user message (no initialization needed for stream-json input)
     await peer.sendUserMessage(task.prompt, sessionId);
 
-    // Return spawned child
+    // Return spawned child with peer attached
     const now = new Date();
-    return {
-      process: {
-        id: `claude-${Date.now()}-resume`,
-        pid: childProcess.pid!,
-        status: 'busy',
-        spawnedAt: now,
-        lastActivity: now,
-        exitCode: null,
-        signal: null,
-        process: childProcess,
-        streams: {
-          stdin: childProcess.stdin!,
-          stdout: childProcess.stdout!,
-          stderr: childProcess.stderr!,
-        },
-        metrics: {
-          totalDuration: 0,
-          tasksCompleted: 0,
-          successRate: 0,
-        },
+    const claudeProcess: ClaudeManagedProcess = {
+      id: `claude-${Date.now()}-resume`,
+      pid: childProcess.pid!,
+      status: 'busy',
+      spawnedAt: now,
+      lastActivity: now,
+      exitCode: null,
+      signal: null,
+      process: childProcess,
+      streams: {
+        stdin: childProcess.stdin!,
+        stdout: childProcess.stdout!,
+        stderr: childProcess.stderr!,
       },
+      metrics: {
+        totalDuration: 0,
+        tasksCompleted: 0,
+        successRate: 0,
+      },
+      // Attach peer for message handling
+      peer,
+    };
+
+    return {
+      process: claudeProcess,
     };
   }
 
@@ -307,15 +326,16 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     const outputFormat = this.config.outputFormat || 'stream-json';
     args.push('--output-format', outputFormat);
 
-    // Input format
-    const inputFormat = this.config.inputFormat || 'stream-json';
-    args.push('--input-format', inputFormat);
+    // Input format (stream-json for bidirectional protocol)
+    if (outputFormat === 'stream-json') {
+      args.push('--input-format', 'stream-json');
+    }
 
     // Permission prompts via stdio (required for approval protocol)
     args.push('--permission-prompt-tool', 'stdio');
 
-    // Verbose mode
-    if (this.config.verbose) {
+    // Verbose mode (required when using --print with --output-format=stream-json)
+    if (this.config.verbose || (this.config.print !== false && outputFormat === 'stream-json')) {
       args.push('--verbose');
     }
 
