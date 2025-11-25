@@ -134,6 +134,74 @@ describe('CursorExecutor', () => {
       );
     });
 
+    it('should add --approve-mcps flag when approveMcps config is true', async () => {
+      executor = new CursorExecutor({ approveMcps: true });
+      vi.spyOn(executor, 'checkAvailability').mockResolvedValue(true);
+
+      await executor.executeTask(task);
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'cursor-agent',
+        ['-p', '--output-format=stream-json', '--approve-mcps'],
+        expect.any(Object)
+      );
+    });
+
+    it('should add --browser flag when browser config is true', async () => {
+      executor = new CursorExecutor({ browser: true });
+      vi.spyOn(executor, 'checkAvailability').mockResolvedValue(true);
+
+      await executor.executeTask(task);
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'cursor-agent',
+        ['-p', '--output-format=stream-json', '--browser'],
+        expect.any(Object)
+      );
+    });
+
+    it('should add --workspace flag when workspace config is set', async () => {
+      executor = new CursorExecutor({ workspace: '/custom/workspace' });
+      vi.spyOn(executor, 'checkAvailability').mockResolvedValue(true);
+
+      await executor.executeTask(task);
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'cursor-agent',
+        ['-p', '--output-format=stream-json', '--workspace', '/custom/workspace'],
+        expect.any(Object)
+      );
+    });
+
+    it('should combine all new configuration flags', async () => {
+      executor = new CursorExecutor({
+        force: true,
+        model: 'sonnet-4.5',
+        approveMcps: true,
+        browser: true,
+        workspace: '/custom/workspace',
+      });
+      vi.spyOn(executor, 'checkAvailability').mockResolvedValue(true);
+
+      await executor.executeTask(task);
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'cursor-agent',
+        [
+          '-p',
+          '--output-format=stream-json',
+          '--force',
+          '--model',
+          'sonnet-4.5',
+          '--approve-mcps',
+          '--browser',
+          '--workspace',
+          '/custom/workspace',
+        ],
+        expect.any(Object)
+      );
+    });
+
     it('should use custom executable path if provided', async () => {
       executor = new CursorExecutor({
         executablePath: '/custom/path/cursor-agent',

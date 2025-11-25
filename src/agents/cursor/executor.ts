@@ -7,21 +7,21 @@
  * @module agents/cursor/executor
  */
 
-import { spawn } from 'child_process';
-import { promisify } from 'util';
-import { exec as execCallback } from 'child_process';
-import { BaseAgentExecutor } from '../base/base-executor.js';
-import type { ExecutionTask } from '../../engine/types.js';
+import { spawn } from "child_process";
+import { promisify } from "util";
+import { exec as execCallback } from "child_process";
+import { BaseAgentExecutor } from "../base/base-executor.js";
+import type { ExecutionTask } from "../../engine/types.js";
 import type {
   SpawnedChild,
   OutputChunk,
   NormalizedEntry,
   AgentCapabilities,
-} from '../types/agent-executor.js';
-import type { CursorConfig } from './types/config.js';
-import { normalizeOutput as cursorNormalizeOutput } from './normalizer/index.js';
-import { CursorExecutorError } from './errors.js';
-import { ensureMcpServerTrust } from './mcp/index.js';
+} from "../types/agent-executor.js";
+import type { CursorConfig } from "./types/config.js";
+import { normalizeOutput as cursorNormalizeOutput } from "./normalizer/index.js";
+import { CursorExecutorError } from "./errors.js";
+import { ensureMcpServerTrust } from "./mcp/index.js";
 
 const exec = promisify(execCallback);
 
@@ -128,7 +128,7 @@ export class CursorExecutor extends BaseAgentExecutor {
 
     // Validate task configuration
     if (!task.workDir) {
-      throw CursorExecutorError.invalidConfig('workDir is required');
+      throw CursorExecutorError.invalidConfig("workDir is required");
     }
 
     // Ensure MCP servers are trusted (non-blocking warning)
@@ -138,21 +138,21 @@ export class CursorExecutor extends BaseAgentExecutor {
     const args = this.buildArgs();
 
     // Get executable path
-    const executablePath = this.config.executablePath || 'cursor-agent';
+    const executablePath = this.config.executablePath || "cursor-agent";
 
     // Spawn process with error handling
     let child;
     try {
       child = spawn(executablePath, args, {
         cwd: task.workDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (err) {
       throw CursorExecutorError.spawnFailed(err as Error);
     }
 
     // Handle spawn errors
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       throw CursorExecutorError.spawnFailed(err);
     });
 
@@ -161,7 +161,7 @@ export class CursorExecutor extends BaseAgentExecutor {
 
     // Send prompt to stdin and close immediately (unidirectional protocol)
     if (child.stdin) {
-      child.stdin.write(prompt + '\n');
+      child.stdin.write(prompt + "\n");
       child.stdin.end();
     }
 
@@ -206,12 +206,14 @@ export class CursorExecutor extends BaseAgentExecutor {
 
     // Validate task configuration
     if (!task.workDir) {
-      throw CursorExecutorError.invalidConfig('workDir is required');
+      throw CursorExecutorError.invalidConfig("workDir is required");
     }
 
     // Validate session ID
     if (!sessionId || !sessionId.trim()) {
-      throw CursorExecutorError.invalidConfig('sessionId is required for resume');
+      throw CursorExecutorError.invalidConfig(
+        "sessionId is required for resume"
+      );
     }
 
     // Ensure MCP servers are trusted (non-blocking warning)
@@ -221,21 +223,21 @@ export class CursorExecutor extends BaseAgentExecutor {
     const args = this.buildArgs(sessionId);
 
     // Get executable path
-    const executablePath = this.config.executablePath || 'cursor-agent';
+    const executablePath = this.config.executablePath || "cursor-agent";
 
     // Spawn process with error handling
     let child;
     try {
       child = spawn(executablePath, args, {
         cwd: task.workDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (err) {
       throw CursorExecutorError.spawnFailed(err as Error);
     }
 
     // Handle spawn errors
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       throw CursorExecutorError.spawnFailed(err);
     });
 
@@ -244,7 +246,7 @@ export class CursorExecutor extends BaseAgentExecutor {
 
     // Send prompt to stdin and close immediately
     if (child.stdin) {
-      child.stdin.write(prompt + '\n');
+      child.stdin.write(prompt + "\n");
       child.stdin.end();
     }
 
@@ -301,7 +303,7 @@ export class CursorExecutor extends BaseAgentExecutor {
       requiresSetup: true, // Needs cursor-agent login or CURSOR_API_KEY
       supportsApprovals: false, // Uses --force flag, no interactive approvals
       supportsMcp: true, // Supports MCP server integration
-      protocol: 'jsonl', // Line-delimited JSON output
+      protocol: "jsonl", // Line-delimited JSON output
     };
   }
 
@@ -322,9 +324,9 @@ export class CursorExecutor extends BaseAgentExecutor {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      const executablePath = this.config.executablePath || 'cursor-agent';
+      const executablePath = this.config.executablePath || "cursor-agent";
       const command =
-        process.platform === 'win32'
+        process.platform === "win32"
           ? `where ${executablePath}`
           : `which ${executablePath}`;
 
@@ -343,21 +345,36 @@ export class CursorExecutor extends BaseAgentExecutor {
    * @private
    */
   private buildArgs(sessionId?: string): string[] {
-    const args = ['-p', '--output-format=stream-json'];
+    const args = ["-p", "--output-format=stream-json"];
 
     // Add --force for auto-approval
     if (this.config.force) {
-      args.push('--force');
+      args.push("--force");
     }
 
     // Add --model if specified
     if (this.config.model) {
-      args.push('--model', this.config.model);
+      args.push("--model", this.config.model);
+    }
+
+    // Add --approve-mcps for auto-approval of MCP servers
+    if (this.config.approveMcps) {
+      args.push("--approve-mcps");
+    }
+
+    // Add --browser for browser automation support
+    if (this.config.browser) {
+      args.push("--browser");
+    }
+
+    // Add --workspace if specified
+    if (this.config.workspace) {
+      args.push("--workspace", this.config.workspace);
     }
 
     // Add --resume if session ID provided
     if (sessionId) {
-      args.push('--resume', sessionId);
+      args.push("--resume", sessionId);
     }
 
     return args;

@@ -138,4 +138,201 @@ describe("buildClaudeConfig", () => {
     expect(typeof config.executablePath).toBe("string");
     expect(typeof config.workDir).toBe("string");
   });
+
+  describe("MCP configuration", () => {
+    it("includes single MCP config as JSON string", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        mcpConfig: {
+          mcpServers: {
+            filesystem: {
+              command: "npx",
+              args: ["-y", "@modelcontextprotocol/server-filesystem"],
+            },
+          },
+        },
+      });
+
+      expect(config.args.includes("--mcp-config")).toBeTruthy();
+      const mcpConfigIdx = config.args.indexOf("--mcp-config");
+      const mcpConfigJson = config.args[mcpConfigIdx + 1];
+      expect(JSON.parse(mcpConfigJson)).toEqual({
+        mcpServers: {
+          filesystem: {
+            command: "npx",
+            args: ["-y", "@modelcontextprotocol/server-filesystem"],
+          },
+        },
+      });
+    });
+
+    it("includes multiple MCP configs", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        mcpConfig: [
+          {
+            mcpServers: {
+              filesystem: { command: "npx", args: ["-y", "filesystem"] },
+            },
+          },
+          {
+            mcpServers: {
+              git: { command: "npx", args: ["-y", "git"] },
+            },
+          },
+        ],
+      });
+
+      const mcpConfigCount = config.args.filter((arg) => arg === "--mcp-config").length;
+      expect(mcpConfigCount).toBe(2);
+    });
+
+    it("includes MCP config file path as-is", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        mcpConfig: "/path/to/mcp-config.json",
+      });
+
+      expect(config.args.includes("--mcp-config")).toBeTruthy();
+      expect(config.args.includes("/path/to/mcp-config.json")).toBeTruthy();
+    });
+
+    it("includes --strict-mcp-config flag when enabled", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        strictMcpConfig: true,
+      });
+
+      expect(config.args.includes("--strict-mcp-config")).toBeTruthy();
+    });
+  });
+
+  describe("Plugin configuration", () => {
+    it("includes single plugin directory", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        pluginDir: "./my-plugins",
+      });
+
+      expect(config.args.includes("--plugin-dir")).toBeTruthy();
+      expect(config.args.includes("./my-plugins")).toBeTruthy();
+    });
+
+    it("includes multiple plugin directories", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        pluginDir: ["./plugins1", "./plugins2"],
+      });
+
+      const pluginDirCount = config.args.filter((arg) => arg === "--plugin-dir").length;
+      expect(pluginDirCount).toBe(2);
+      expect(config.args.includes("./plugins1")).toBeTruthy();
+      expect(config.args.includes("./plugins2")).toBeTruthy();
+    });
+  });
+
+  describe("Tool configuration", () => {
+    it("includes --tools flag with string", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        tools: "default",
+      });
+
+      expect(config.args.includes("--tools")).toBeTruthy();
+      expect(config.args.includes("default")).toBeTruthy();
+    });
+
+    it("includes --tools flag with array (comma-separated)", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        tools: ["Bash", "Edit", "Read"],
+      });
+
+      expect(config.args.includes("--tools")).toBeTruthy();
+      expect(config.args.includes("Bash,Edit,Read")).toBeTruthy();
+    });
+
+    it("includes --tools flag with empty string to disable all", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        tools: "",
+      });
+
+      expect(config.args.includes("--tools")).toBeTruthy();
+      const toolsIdx = config.args.indexOf("--tools");
+      expect(config.args[toolsIdx + 1]).toBe("");
+    });
+
+    it("includes --allowed-tools flag with single tool", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        allowedTools: "Bash(git:*)",
+      });
+
+      expect(config.args.includes("--allowed-tools")).toBeTruthy();
+      expect(config.args.includes("Bash(git:*)")).toBeTruthy();
+    });
+
+    it("includes --allowed-tools flag with multiple tools", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        allowedTools: ["Bash(git:*)", "Edit", "Read"],
+      });
+
+      expect(config.args.includes("--allowed-tools")).toBeTruthy();
+      expect(config.args.includes("Bash(git:*)")).toBeTruthy();
+      expect(config.args.includes("Edit")).toBeTruthy();
+      expect(config.args.includes("Read")).toBeTruthy();
+    });
+
+    it("includes --disallowed-tools flag with single tool", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        disallowedTools: "Bash(rm:*)",
+      });
+
+      expect(config.args.includes("--disallowed-tools")).toBeTruthy();
+      expect(config.args.includes("Bash(rm:*)")).toBeTruthy();
+    });
+
+    it("includes --disallowed-tools flag with multiple tools", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        disallowedTools: ["Bash(rm:*)", "Write"],
+      });
+
+      expect(config.args.includes("--disallowed-tools")).toBeTruthy();
+      expect(config.args.includes("Bash(rm:*)")).toBeTruthy();
+      expect(config.args.includes("Write")).toBeTruthy();
+    });
+  });
+
+  describe("Complete configuration", () => {
+    it("builds config with all new options together", () => {
+      const config = buildClaudeConfig({
+        workDir: "/test/dir",
+        print: true,
+        outputFormat: "stream-json",
+        mcpConfig: {
+          mcpServers: {
+            filesystem: { command: "npx", args: ["-y", "filesystem"] },
+          },
+        },
+        strictMcpConfig: true,
+        pluginDir: ["./plugins1", "./plugins2"],
+        tools: ["Bash", "Edit", "Read"],
+        allowedTools: ["Bash(git:*)"],
+        disallowedTools: ["Bash(rm:*)"],
+      });
+
+      expect(config.args.includes("--print")).toBeTruthy();
+      expect(config.args.includes("--output-format")).toBeTruthy();
+      expect(config.args.includes("--mcp-config")).toBeTruthy();
+      expect(config.args.includes("--strict-mcp-config")).toBeTruthy();
+      expect(config.args.filter((arg) => arg === "--plugin-dir").length).toBe(2);
+      expect(config.args.includes("--tools")).toBeTruthy();
+      expect(config.args.includes("--allowed-tools")).toBeTruthy();
+      expect(config.args.includes("--disallowed-tools")).toBeTruthy();
+    });
+  });
 });

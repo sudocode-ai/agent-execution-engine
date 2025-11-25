@@ -7,11 +7,15 @@
  */
 
 // Legacy adapter (will be deprecated)
-export * from './config-builder.js';
-export * from './adapter.js';
+export { buildClaudeConfig } from "./config-builder.js";
+export type {
+  McpServerConfig as ClaudeMcpServerConfig,
+  McpConfig as ClaudeMcpConfig,
+} from "./config-builder.js";
+export * from "./adapter.js";
 
 // Executor
-export { ClaudeCodeExecutor } from './executor.js';
+export { ClaudeCodeExecutor } from "./executor.js";
 
 // Types
 export type {
@@ -41,7 +45,7 @@ export type {
   PermissionMode,
   PermissionUpdate,
   SdkControlRequest,
-} from './types/index.js';
+} from "./types/index.js";
 
 // Protocol
 export {
@@ -53,10 +57,7 @@ export {
   type IProtocolClient,
   type MessageHandler,
   type ErrorHandler as ProtocolErrorHandler,
-} from './protocol/index.js';
+} from "./protocol/index.js";
 
 // Normalizer
-export {
-  normalizeMessage,
-  createNormalizerState,
-} from './normalizer.js';
+export { normalizeMessage, createNormalizerState } from "./normalizer.js";

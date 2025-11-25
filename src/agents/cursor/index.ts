@@ -5,13 +5,16 @@
  */
 
 // Executor
-export { CursorExecutor } from './executor.js';
+export { CursorExecutor } from "./executor.js";
 
 // Normalizer
-export { CursorNormalizationState, normalizeOutput } from './normalizer/index.js';
+export {
+  CursorNormalizationState,
+  normalizeOutput,
+} from "./normalizer/index.js";
 
 // Errors
-export { CursorExecutorError } from './errors.js';
+export { CursorExecutorError } from "./errors.js";
 
 // MCP utilities
 export {
@@ -20,8 +23,11 @@ export {
   readMcpConfig,
   isMcpServerTrusted,
   listMcpServers,
-} from './mcp/index.js';
-export type { McpServerConfig, McpConfig } from './mcp/index.js';
+} from "./mcp/index.js";
+export type {
+  McpServerConfig as CursorMcpServerConfig,
+  McpConfig as CursorMcpConfig,
+} from "./mcp/index.js";
 
 // Types
 export type {
@@ -46,7 +52,7 @@ export type {
   CursorTodoTool,
   CursorMcpTool,
   CursorUnknownTool,
-} from './types/index.js';
+} from "./types/index.js";
 
 // Helpers
-export { extractSessionId, concatText, getToolName } from './types/index.js';
+export { extractSessionId, concatText, getToolName } from "./types/index.js";

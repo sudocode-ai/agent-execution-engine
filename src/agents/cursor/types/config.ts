@@ -54,7 +54,14 @@ export interface CursorConfig {
    *
    * @default 'auto'
    */
-  model?: 'auto' | 'sonnet-4.5' | 'sonnet-4.5-thinking' | 'gpt-5' | 'opus-4.1' | 'grok' | string;
+  model?:
+    | "auto"
+    | "sonnet-4.5"
+    | "sonnet-4.5-thinking"
+    | "gpt-5"
+    | "opus-4.1"
+    | "grok"
+    | string;
 
   /**
    * Additional text to append to user prompts.
@@ -66,6 +73,32 @@ export interface CursorConfig {
    * ```
    */
   appendPrompt?: string;
+
+  /**
+   * Automatically approve all MCP servers.
+   * Only works with --print/headless mode.
+   *
+   * @default false
+   */
+  approveMcps?: boolean;
+
+  /**
+   * Enable browser automation support.
+   *
+   * @default false
+   */
+  browser?: boolean;
+
+  /**
+   * Workspace directory to use.
+   * If not specified, uses current working directory.
+   *
+   * @example
+   * ```typescript
+   * workspace: '/path/to/project'
+   * ```
+   */
+  workspace?: string;
 
   /**
    * Path to cursor-agent executable.
