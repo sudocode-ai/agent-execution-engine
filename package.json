@@ -1,6 +1,6 @@
 {
   "name": "agent-execution-engine",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Generic execution engine for CLI agents with process management, resilience, and workflow orchestration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
