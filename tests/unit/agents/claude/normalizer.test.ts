@@ -152,11 +152,11 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
     });
   });
 
-  describe('Tool Completion', () => {
-    it('should update tool status to success on completion', () => {
+  describe('Tool Completion via UserMessage', () => {
+    it('should parse tool_result block from user message and update tool status to success', () => {
       const state = createNormalizerState();
 
-      // First, create the tool use entry
+      // First, create the tool use entry via assistant message
       const toolUseMsg: AssistantMessage = {
         type: 'assistant',
         message: {
@@ -164,7 +164,7 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
           content: [
             {
               type: 'tool_use',
-              id: 'tool-456',
+              id: 'tool-user-456',
               name: 'Bash',
               input: { command: 'echo hello' },
             },
@@ -178,28 +178,35 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
         expect(startEntry!.type.tool.status).toBe('running');
       }
 
-      // Now send the completion message
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'tool-456',
-        toolName: 'Bash',
-        toolResult: { stdout: 'hello\n', exitCode: 0 },
+      // Now send the tool result via user message with tool_result block
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-user-456',
+              content: [{ type: 'text', text: 'hello\n' }],
+            },
+          ],
+        },
       };
 
-      const completedEntry = normalizeMessage(completionMsg, workDir, state);
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
 
       expect(completedEntry).toBeDefined();
       expect(completedEntry!.index).toBe(startEntry!.index); // Same index
       expect(completedEntry!.type.kind).toBe('tool_use');
       if (completedEntry!.type.kind === 'tool_use') {
         expect(completedEntry!.type.tool.status).toBe('success');
+        expect(completedEntry!.type.tool.toolName).toBe('Bash');
         expect(completedEntry!.type.tool.result).toBeDefined();
         expect(completedEntry!.type.tool.result!.success).toBe(true);
       }
     });
 
-    it('should update tool status to failed on non-zero exit code', () => {
+    it('should parse tool_result with is_error flag and set status to failed', () => {
       const state = createNormalizerState();
 
       // Create tool use entry
@@ -210,7 +217,55 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
           content: [
             {
               type: 'tool_use',
-              id: 'tool-789',
+              id: 'tool-error-789',
+              name: 'Read',
+              input: { file_path: '/nonexistent' },
+            },
+          ],
+        },
+      };
+
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // Send tool result with is_error flag
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-error-789',
+              content: [{ type: 'text', text: 'File not found: /nonexistent' }],
+              is_error: true,
+            },
+          ],
+        },
+      };
+
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
+
+      expect(completedEntry).toBeDefined();
+      expect(completedEntry!.type.kind).toBe('tool_use');
+      if (completedEntry!.type.kind === 'tool_use') {
+        expect(completedEntry!.type.tool.status).toBe('failed');
+        expect(completedEntry!.type.tool.result!.success).toBe(false);
+        expect(completedEntry!.type.tool.result!.error).toContain('File not found');
+      }
+    });
+
+    it('should parse JSON result content and detect exitCode failure', () => {
+      const state = createNormalizerState();
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-exit-code',
               name: 'Bash',
               input: { command: 'exit 1' },
             },
@@ -220,16 +275,22 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
 
       normalizeMessage(toolUseMsg, workDir, state);
 
-      // Send completion with non-zero exit code
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'tool-789',
-        toolName: 'Bash',
-        toolResult: { stderr: 'error', exitCode: 1 },
+      // Send tool result with JSON containing non-zero exitCode
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-exit-code',
+              content: [{ type: 'text', text: '{"exitCode": 1, "stderr": "command failed"}' }],
+            },
+          ],
+        },
       };
 
-      const completedEntry = normalizeMessage(completionMsg, workDir, state);
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
 
       expect(completedEntry).toBeDefined();
       expect(completedEntry!.type.kind).toBe('tool_use');
@@ -240,7 +301,7 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
       }
     });
 
-    it('should update tool status to failed on error result', () => {
+    it('should parse JSON result content and detect error field', () => {
       const state = createNormalizerState();
 
       // Create tool use entry
@@ -251,9 +312,9 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
           content: [
             {
               type: 'tool_use',
-              id: 'tool-error',
+              id: 'tool-json-error',
               name: 'Read',
-              input: { file_path: '/nonexistent' },
+              input: { file_path: '/secret' },
             },
           ],
         },
@@ -261,24 +322,317 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
 
       normalizeMessage(toolUseMsg, workDir, state);
 
-      // Send completion with error
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'tool-error',
-        toolName: 'Read',
-        toolResult: { error: 'File not found' },
+      // Send tool result with JSON containing error field
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-json-error',
+              content: [{ type: 'text', text: '{"error": "Permission denied"}' }],
+            },
+          ],
+        },
       };
 
-      const completedEntry = normalizeMessage(completionMsg, workDir, state);
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
 
       expect(completedEntry).toBeDefined();
       expect(completedEntry!.type.kind).toBe('tool_use');
       if (completedEntry!.type.kind === 'tool_use') {
         expect(completedEntry!.type.tool.status).toBe('failed');
         expect(completedEntry!.type.tool.result!.success).toBe(false);
-        expect(completedEntry!.type.tool.result!.error).toBe('File not found');
+        expect(completedEntry!.type.tool.result!.error).toBe('Permission denied');
       }
+    });
+
+    it('should skip tool_result if no matching tool_use_id found', () => {
+      const state = createNormalizerState();
+
+      // Send tool result without prior tool use
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'unknown-tool-id',
+              content: [{ type: 'text', text: 'some result' }],
+            },
+          ],
+        },
+      };
+
+      const entry = normalizeMessage(toolResultMsg, workDir, state);
+
+      expect(entry).toBeNull();
+    });
+
+    it('should handle plain text (non-JSON) result as success', () => {
+      const state = createNormalizerState();
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-plain-text',
+              name: 'Read',
+              input: { file_path: '/test/file.txt' },
+            },
+          ],
+        },
+      };
+
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // Send plain text result (not JSON)
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-plain-text',
+              content: [{ type: 'text', text: 'File contents here...' }],
+            },
+          ],
+        },
+      };
+
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
+
+      expect(completedEntry).toBeDefined();
+      expect(completedEntry!.type.kind).toBe('tool_use');
+      if (completedEntry!.type.kind === 'tool_use') {
+        expect(completedEntry!.type.tool.status).toBe('success');
+        expect(completedEntry!.type.tool.result!.success).toBe(true);
+        expect(completedEntry!.type.tool.result!.data).toBe('File contents here...');
+      }
+    });
+
+    it('should handle empty tool_result content as success', () => {
+      const state = createNormalizerState();
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-empty-result',
+              name: 'Write',
+              input: { file_path: '/test/file.txt', content: 'hello' },
+            },
+          ],
+        },
+      };
+
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // Send empty result content
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-empty-result',
+              content: [],
+            },
+          ],
+        },
+      };
+
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
+
+      expect(completedEntry).toBeDefined();
+      expect(completedEntry!.type.kind).toBe('tool_use');
+      if (completedEntry!.type.kind === 'tool_use') {
+        expect(completedEntry!.type.tool.status).toBe('success');
+        expect(completedEntry!.type.tool.result!.success).toBe(true);
+      }
+    });
+
+    it('should include metadata in tool result entries', () => {
+      const state = createNormalizerState();
+
+      // Setup session
+      const systemMsg: SystemMessage = {
+        type: 'system',
+        sessionId: 'sess-tool-result-123',
+        model: 'claude-sonnet-4',
+      };
+      normalizeMessage(systemMsg, workDir, state);
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-metadata',
+              name: 'Bash',
+              input: { command: 'ls' },
+            },
+          ],
+        },
+      };
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // Send tool result
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-metadata',
+              content: [{ type: 'text', text: 'file1.txt' }],
+            },
+          ],
+        },
+      };
+
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
+
+      expect(completedEntry).toBeDefined();
+      expect(completedEntry!.metadata?.sessionId).toBe('sess-tool-result-123');
+      expect(completedEntry!.metadata?.model).toBe('claude-sonnet-4');
+    });
+
+    it('should handle user message with mixed text and tool_result blocks', () => {
+      const state = createNormalizerState();
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-mixed',
+              name: 'Bash',
+              input: { command: 'echo test' },
+            },
+          ],
+        },
+      };
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // Send user message with tool_result (tool_result takes precedence)
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-mixed',
+              content: [{ type: 'text', text: 'test output' }],
+            },
+          ],
+        },
+      };
+
+      const entry = normalizeMessage(toolResultMsg, workDir, state);
+
+      // Should be parsed as tool completion, not user message
+      expect(entry).toBeDefined();
+      expect(entry!.type.kind).toBe('tool_use');
+    });
+
+    it('should format tool result content for display', () => {
+      const state = createNormalizerState();
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-format',
+              name: 'Bash',
+              input: { command: 'ls -la' },
+            },
+          ],
+        },
+      };
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // Send tool result
+      const toolResultMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-format',
+              content: [{ type: 'text', text: 'drwxr-xr-x  5 user  staff  160 Nov 25 12:00 .\ndrwxr-xr-x 10 user  staff  320 Nov 25 11:00 ..' }],
+            },
+          ],
+        },
+      };
+
+      const completedEntry = normalizeMessage(toolResultMsg, workDir, state);
+
+      expect(completedEntry).toBeDefined();
+      expect(completedEntry!.content).toContain('Bash');
+      expect(completedEntry!.content).toContain('drwxr-xr-x');
+    });
+  });
+
+  describe('Tool Completion via ToolUseMessage (Legacy)', () => {
+    it('should skip tool_use messages (Claude uses user messages for results)', () => {
+      const state = createNormalizerState();
+
+      // Create tool use entry
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-legacy',
+              name: 'Bash',
+              input: { command: 'echo hello' },
+            },
+          ],
+        },
+      };
+      normalizeMessage(toolUseMsg, workDir, state);
+
+      // ToolUseMessage should be skipped (Claude doesn't use these for results)
+      const toolUseCompleteMsg: ToolUseMessage = {
+        type: 'tool_use',
+        subtype: 'completed',
+        toolUseId: 'tool-legacy',
+        toolName: 'Bash',
+        toolResult: { stdout: 'hello\n', exitCode: 0 },
+      };
+
+      const entry = normalizeMessage(toolUseCompleteMsg, workDir, state);
+
+      // Should return null as Claude CLI uses user messages for tool results
+      expect(entry).toBeNull();
     });
 
     it('should skip started subtype events', () => {
@@ -294,101 +648,6 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
       const entry = normalizeMessage(startedMsg, workDir, state);
 
       expect(entry).toBeNull();
-    });
-
-    it('should skip completion if no matching tool_use_id found', () => {
-      const state = createNormalizerState();
-
-      // Send completion without prior tool use
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'unknown-tool',
-        toolName: 'Bash',
-        toolResult: { stdout: 'output' },
-      };
-
-      const entry = normalizeMessage(completionMsg, workDir, state);
-
-      expect(entry).toBeNull();
-    });
-
-    it('should format result content with stdout/stderr', () => {
-      const state = createNormalizerState();
-
-      // Create tool use entry
-      const toolUseMsg: AssistantMessage = {
-        type: 'assistant',
-        message: {
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool_use',
-              id: 'tool-output',
-              name: 'Bash',
-              input: { command: 'ls' },
-            },
-          ],
-        },
-      };
-
-      normalizeMessage(toolUseMsg, workDir, state);
-
-      // Send completion with stdout
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'tool-output',
-        toolName: 'Bash',
-        toolResult: { stdout: 'file1.txt\nfile2.txt', exitCode: 0 },
-      };
-
-      const completedEntry = normalizeMessage(completionMsg, workDir, state);
-
-      expect(completedEntry).toBeDefined();
-      expect(completedEntry!.content).toContain('Bash');
-      expect(completedEntry!.content).toContain('file1.txt');
-      expect(completedEntry!.content).toContain('Exit code: 0');
-    });
-
-    it('should handle null/undefined tool result as success', () => {
-      const state = createNormalizerState();
-
-      // Create tool use entry
-      const toolUseMsg: AssistantMessage = {
-        type: 'assistant',
-        message: {
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool_use',
-              id: 'tool-null',
-              name: 'Edit',
-              input: { file_path: '/test/file.ts' },
-            },
-          ],
-        },
-      };
-
-      normalizeMessage(toolUseMsg, workDir, state);
-
-      // Send completion with no result
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'tool-null',
-        toolName: 'Edit',
-        toolResult: undefined,
-      };
-
-      const completedEntry = normalizeMessage(completionMsg, workDir, state);
-
-      expect(completedEntry).toBeDefined();
-      expect(completedEntry!.type.kind).toBe('tool_use');
-      if (completedEntry!.type.kind === 'tool_use') {
-        expect(completedEntry!.type.tool.status).toBe('success');
-        expect(completedEntry!.type.tool.result!.success).toBe(true);
-      }
     });
   });
 
@@ -595,13 +854,19 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
       const startEntry = normalizeMessage(toolUseMsg, workDir, state);
       expect(startEntry!.metadata?.sessionId).toBe('sess-tool-123');
 
-      // Tool completed
-      const completionMsg: ToolUseMessage = {
-        type: 'tool_use',
-        subtype: 'completed',
-        toolUseId: 'tool-456',
-        toolName: 'Bash',
-        toolResult: { stdout: 'hello\n', exitCode: 0 },
+      // Tool completed via user message with tool_result block
+      const completionMsg: UserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-456',
+              content: [{ type: 'text', text: 'hello\n' }],
+            },
+          ],
+        },
       };
       const completedEntry = normalizeMessage(completionMsg, workDir, state);
       expect(completedEntry!.metadata?.sessionId).toBe('sess-tool-123');

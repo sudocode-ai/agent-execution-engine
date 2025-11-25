@@ -18,13 +18,13 @@ export interface BaseMessage {
 /**
  * Content block types that can appear in messages
  */
-export type ContentBlock = TextBlock | ToolUseBlock;
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
 
 /**
  * Text content block
  */
 export interface TextBlock {
-  type: 'text';
+  type: "text";
   text: string;
 }
 
@@ -34,10 +34,23 @@ export interface TextBlock {
  * Appears in assistant messages when Claude wants to use a tool.
  */
 export interface ToolUseBlock {
-  type: 'tool_use';
+  type: "tool_use";
   id: string; // tool_use_id for matching with hook callbacks
   name: string; // Tool name: 'Bash', 'Edit', 'Read', 'Write', MCP tools, etc.
   input: unknown; // Tool-specific input parameters
+}
+
+/**
+ * Tool result content block
+ *
+ * Appears in user messages after a tool has been executed.
+ * Contains the result of the tool execution.
+ */
+export interface ToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string; // Links back to the original tool_use block
+  content: Array<TextBlock>; // Result content (usually text)
+  is_error?: boolean; // Whether the tool execution failed
 }
 
 /**
@@ -57,8 +70,8 @@ export interface ToolUseBlock {
  * ```
  */
 export interface SystemMessage extends BaseMessage {
-  type: 'system';
-  subtype?: 'init' | 'session_start';
+  type: "system";
+  subtype?: "init" | "session_start";
   sessionId: string;
   model?: string;
   mcpServers?: Array<{
@@ -71,7 +84,7 @@ export interface SystemMessage extends BaseMessage {
  * Message content structure
  */
 export interface MessageContent {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: Array<ContentBlock> | string;
 }
 
@@ -93,9 +106,9 @@ export interface MessageContent {
  * ```
  */
 export interface UserMessage extends BaseMessage {
-  type: 'user';
+  type: "user";
   message: {
-    role: 'user';
+    role: "user";
     content: Array<ContentBlock> | string;
   };
   sessionId?: string;
@@ -137,9 +150,9 @@ export interface UserMessage extends BaseMessage {
  * ```
  */
 export interface AssistantMessage extends BaseMessage {
-  type: 'assistant';
+  type: "assistant";
   message: {
-    role: 'assistant';
+    role: "assistant";
     content: Array<ContentBlock>;
   };
   sessionId?: string;
@@ -173,8 +186,8 @@ export interface AssistantMessage extends BaseMessage {
  * ```
  */
 export interface ToolUseMessage extends BaseMessage {
-  type: 'tool_use';
-  subtype?: 'started' | 'completed';
+  type: "tool_use";
+  subtype?: "started" | "completed";
   toolUseId?: string;
   toolName?: string;
   toolInput?: unknown;
@@ -208,7 +221,7 @@ export interface ToolUseMessage extends BaseMessage {
  * ```
  */
 export interface ResultMessage extends BaseMessage {
-  type: 'result';
+  type: "result";
   isError: boolean;
   durationMs?: number;
   result?: unknown;
@@ -222,7 +235,7 @@ export interface ResultMessage extends BaseMessage {
  * See control.ts for ControlRequest types.
  */
 export interface ControlRequestMessage extends BaseMessage {
-  type: 'control_request';
+  type: "control_request";
   requestId: string;
   request: unknown; // Actual type defined in control.ts to avoid circular dependency
 }
@@ -234,7 +247,7 @@ export interface ControlRequestMessage extends BaseMessage {
  * See control.ts for ControlResponse types.
  */
 export interface ControlResponseMessage {
-  type: 'control_response';
+  type: "control_response";
   response: unknown; // Actual type defined in control.ts to avoid circular dependency
 }
 

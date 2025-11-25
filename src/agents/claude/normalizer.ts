@@ -6,7 +6,7 @@
  * @module agents/claude/normalizer
  */
 
-import path from 'path';
+import path from "path";
 import type {
   ClaudeStreamMessage,
   SystemMessage,
@@ -16,14 +16,25 @@ import type {
   ResultMessage,
   ContentBlock,
   ToolUseBlock,
+  ToolResultBlock,
   TextBlock,
-} from './types/messages.js';
+} from "./types/messages.js";
 import type {
   NormalizedEntry,
   ActionType,
   ToolUseEntry,
   ErrorEntry,
-} from '../types/agent-executor.js';
+} from "../types/agent-executor.js";
+
+/**
+ * Tool use tracking info stored in the map
+ */
+interface ToolUseInfo {
+  /** Entry index for this tool use */
+  entryIndex: number;
+  /** Tool name */
+  toolName: string;
+}
 
 /**
  * Normalizer state for tracking streaming and tool uses
@@ -33,8 +44,8 @@ interface NormalizerState {
   index: number;
   /** Active assistant message being coalesced */
   activeMessage: { index: number; content: string } | null;
-  /** Map of tool_use_id to entry index */
-  toolUseMap: Map<string, number>;
+  /** Map of tool_use_id to tool info (entry index and name) */
+  toolUseMap: Map<string, ToolUseInfo>;
   /** Session ID captured from system message */
   sessionId: string | null;
   /** Model captured from system message */
@@ -68,23 +79,23 @@ export function normalizeMessage(
   state: NormalizerState
 ): NormalizedEntry | null {
   switch (message.type) {
-    case 'system':
+    case "system":
       return createSystemMessage(message, state);
 
-    case 'user':
+    case "user":
       return createUserMessage(message, state);
 
-    case 'assistant':
+    case "assistant":
       return handleAssistantMessage(message, workDir, state);
 
-    case 'tool_use':
+    case "tool_use":
       return handleToolUseMessage(message, workDir, state);
 
-    case 'result':
+    case "result":
       return handleResultMessage(message, workDir, state);
 
-    case 'control_request':
-    case 'control_response':
+    case "control_request":
+    case "control_response":
       // Control protocol messages are not displayed
       return null;
 
@@ -109,8 +120,10 @@ function createSystemMessage(
   return {
     index: state.index++,
     timestamp: new Date(),
-    type: { kind: 'system_message' },
-    content: `Session: ${message.sessionId}${message.model ? `, Model: ${message.model}` : ''}`,
+    type: { kind: "system_message" },
+    content: `Session: ${message.sessionId}${
+      message.model ? `, Model: ${message.model}` : ""
+    }`,
     metadata: {
       sessionId: message.sessionId,
       model: message.model,
@@ -119,30 +132,163 @@ function createSystemMessage(
 }
 
 /**
- * Create user message entry
+ * Handle user message
+ *
+ * User messages can contain:
+ * - Regular text content (user input)
+ * - Tool result blocks (tool execution results being fed back to Claude)
+ *
+ * When a tool_result block is found, we emit a tool completion entry instead
+ * of a user_message entry, since the tool result is what's interesting for the UI.
  */
 function createUserMessage(
   message: UserMessage,
   state: NormalizerState
-): NormalizedEntry {
+): NormalizedEntry | null {
   // Close any active assistant message
   state.activeMessage = null;
 
+  // Check if this is a tool result message
+  if (typeof message.message.content !== "string") {
+    const toolResultBlocks = message.message.content.filter(
+      (block): block is ToolResultBlock => block.type === "tool_result"
+    );
+
+    // If we have tool result blocks, emit tool completion entries
+    if (toolResultBlocks.length > 0) {
+      // Handle first tool result (most common case)
+      const toolResult = toolResultBlocks[0];
+      const toolInfo = state.toolUseMap.get(toolResult.tool_use_id);
+
+      if (toolInfo) {
+        // Extract result content
+        const resultContent = toolResult.content
+          .filter((block): block is TextBlock => block.type === "text")
+          .map((block) => block.text)
+          .join("");
+
+        // Parse the result to determine success/failure
+        const { status, result } = parseToolResultContent(
+          resultContent,
+          toolResult.is_error
+        );
+
+        return {
+          index: toolInfo.entryIndex, // Same index as the original tool_use entry
+          timestamp: new Date(),
+          type: {
+            kind: "tool_use",
+            tool: {
+              toolName: toolInfo.toolName,
+              action: {
+                kind: "tool",
+                toolName: toolInfo.toolName,
+                result: resultContent,
+              },
+              status,
+              result,
+            },
+          },
+          content: formatToolResultContent(toolInfo.toolName, resultContent),
+          metadata: state.sessionId
+            ? { sessionId: state.sessionId, model: state.model }
+            : undefined,
+        };
+      }
+
+      // No matching tool found - skip this message
+      return null;
+    }
+  }
+
+  // Regular user message - extract text content
   const content =
-    typeof message.message.content === 'string'
+    typeof message.message.content === "string"
       ? message.message.content
       : message.message.content
-          .filter((block) => block.type === 'text')
-          .map((block) => (block as TextBlock).text)
-          .join('');
+          .filter((block): block is TextBlock => block.type === "text")
+          .map((block) => block.text)
+          .join("");
 
   return {
     index: state.index++,
     timestamp: new Date(),
-    type: { kind: 'user_message' },
+    type: { kind: "user_message" },
     content,
-    metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
+    metadata: state.sessionId
+      ? { sessionId: state.sessionId, model: state.model }
+      : undefined,
   };
+}
+
+/**
+ * Parse tool result content to determine status and structured result
+ *
+ * @param content - Raw result content string
+ * @param isError - Whether the tool reported an error
+ * @returns Object with status and structured result
+ */
+function parseToolResultContent(
+  content: string,
+  isError?: boolean
+): {
+  status: "success" | "failed";
+  result: { success: boolean; data?: unknown; error?: string };
+} {
+  // If explicitly marked as error
+  if (isError) {
+    return {
+      status: "failed",
+      result: { success: false, error: content },
+    };
+  }
+
+  // Try to parse as JSON to check for error indicators
+  try {
+    const parsed = JSON.parse(content);
+
+    if (typeof parsed === "object" && parsed !== null) {
+      // Check for explicit error field
+      if ("error" in parsed || "isError" in parsed) {
+        const errorMessage =
+          typeof parsed.error === "string"
+            ? parsed.error
+            : typeof parsed.message === "string"
+            ? parsed.message
+            : content;
+        return {
+          status: "failed",
+          result: { success: false, error: errorMessage, data: parsed },
+        };
+      }
+
+      // Check for Bash command failure (non-zero exit code)
+      if ("exitCode" in parsed && typeof parsed.exitCode === "number") {
+        if (parsed.exitCode !== 0) {
+          return {
+            status: "failed",
+            result: {
+              success: false,
+              data: parsed,
+              error: `Command exited with code ${parsed.exitCode}`,
+            },
+          };
+        }
+      }
+    }
+
+    // Parsed successfully without errors
+    return {
+      status: "success",
+      result: { success: true, data: parsed },
+    };
+  } catch {
+    // Not JSON - treat as plain text success
+    return {
+      status: "success",
+      result: { success: true, data: content },
+    };
+  }
 }
 
 /**
@@ -162,7 +308,7 @@ function handleAssistantMessage(
 
   // Check for tool use blocks
   const toolUseBlocks = message.message.content.filter(
-    (block): block is ToolUseBlock => block.type === 'tool_use'
+    (block): block is ToolUseBlock => block.type === "tool_use"
   );
 
   // If there are tool use blocks, create tool_use entries
@@ -173,7 +319,7 @@ function handleAssistantMessage(
     // For now, handle first tool use block
     const toolUse = toolUseBlocks[0];
     const entryIndex = state.index++;
-    state.toolUseMap.set(toolUse.id, entryIndex);
+    state.toolUseMap.set(toolUse.id, { entryIndex, toolName: toolUse.name });
 
     const action = parseToolAction(toolUse, workDir);
 
@@ -181,15 +327,17 @@ function handleAssistantMessage(
       index: entryIndex,
       timestamp: new Date(),
       type: {
-        kind: 'tool_use',
+        kind: "tool_use",
         tool: {
           toolName: toolUse.name,
           action,
-          status: 'running',
+          status: "running",
         },
       },
       content: formatToolUseContent(toolUse),
-      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
+      metadata: state.sessionId
+        ? { sessionId: state.sessionId, model: state.model }
+        : undefined,
     };
   }
 
@@ -204,9 +352,11 @@ function handleAssistantMessage(
     return {
       index: state.activeMessage.index,
       timestamp: new Date(),
-      type: { kind: 'assistant_message' },
+      type: { kind: "assistant_message" },
       content: state.activeMessage.content,
-      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
+      metadata: state.sessionId
+        ? { sessionId: state.sessionId, model: state.model }
+        : undefined,
     };
   }
 
@@ -219,9 +369,11 @@ function handleAssistantMessage(
   return {
     index: state.activeMessage.index,
     timestamp: new Date(),
-    type: { kind: 'assistant_message' },
+    type: { kind: "assistant_message" },
     content,
-    metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
+    metadata: state.sessionId
+      ? { sessionId: state.sessionId, model: state.model }
+      : undefined,
   };
 }
 
@@ -230,137 +382,28 @@ function handleAssistantMessage(
  */
 function extractAssistantContent(content: ContentBlock[]): string {
   return content
-    .filter((block): block is TextBlock => block.type === 'text')
+    .filter((block): block is TextBlock => block.type === "text")
     .map((block) => block.text)
-    .join('');
+    .join("");
 }
 
 /**
  * Handle tool use message
  *
  * Tool use messages are lifecycle events (started/completed).
- * - 'started' events are skipped (we already created the entry from AssistantMessage)
- * - 'completed' events update the existing entry with success/failed status and result
+ * Note: Claude CLI doesn't currently emit tool_use messages with subtype 'completed'.
+ * Tool results come through user messages with tool_result content blocks instead.
+ * This handler is kept for potential future compatibility.
  */
 function handleToolUseMessage(
-  message: ToolUseMessage,
-  workDir: string,
-  state: NormalizerState
+  _message: ToolUseMessage,
+  _workDir: string,
+  _state: NormalizerState
 ): NormalizedEntry | null {
-  // Skip 'started' events - we get tool details from AssistantMessage
-  if (message.subtype === 'started') {
-    return null;
-  }
-
-  // Handle 'completed' events - update the existing tool entry
-  if (message.subtype === 'completed' && message.toolUseId) {
-    const entryIndex = state.toolUseMap.get(message.toolUseId);
-
-    if (entryIndex === undefined) {
-      // No matching started entry found - skip
-      return null;
-    }
-
-    // Determine status from result
-    const { status, result } = parseToolResult(message.toolResult);
-
-    // Get the tool name from the message (may not always be present)
-    const toolName = message.toolName || 'unknown';
-
-    // Format the result content
-    const content = formatToolResultContent(toolName, message.toolResult);
-
-    return {
-      index: entryIndex, // Same index as the original tool_use entry
-      timestamp: new Date(),
-      type: {
-        kind: 'tool_use',
-        tool: {
-          toolName,
-          action: { kind: 'tool', toolName, result: message.toolResult },
-          status,
-          result,
-        },
-      },
-      content,
-      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
-    };
-  }
-
+  // Claude CLI doesn't emit tool_use messages with completion info.
+  // Tool results are embedded in user messages as tool_result content blocks.
+  // See createUserMessage() for tool result handling.
   return null;
-}
-
-/**
- * Parse tool result to determine status and structured result
- *
- * @param toolResult - Raw tool result from Claude
- * @returns Object with status and structured result
- */
-function parseToolResult(toolResult: unknown): {
-  status: 'success' | 'failed';
-  result: { success: boolean; data?: unknown; error?: string };
-} {
-  // Handle null/undefined results
-  if (toolResult === null || toolResult === undefined) {
-    return {
-      status: 'success',
-      result: { success: true },
-    };
-  }
-
-  // Check for error indicators in the result
-  if (typeof toolResult === 'object') {
-    const result = toolResult as Record<string, unknown>;
-
-    // Check for explicit error field
-    if ('error' in result || 'isError' in result) {
-      const errorMessage =
-        typeof result.error === 'string'
-          ? result.error
-          : typeof result.message === 'string'
-            ? result.message
-            : JSON.stringify(result);
-      return {
-        status: 'failed',
-        result: { success: false, error: errorMessage },
-      };
-    }
-
-    // Check for Bash command failure (non-zero exit code)
-    if ('exitCode' in result && typeof result.exitCode === 'number') {
-      if (result.exitCode !== 0) {
-        return {
-          status: 'failed',
-          result: {
-            success: false,
-            data: toolResult,
-            error: `Command exited with code ${result.exitCode}`,
-          },
-        };
-      }
-    }
-
-    // Check for failure field (some tools use this)
-    if ('failure' in result) {
-      return {
-        status: 'failed',
-        result: {
-          success: false,
-          data: toolResult,
-          error:
-            typeof result.failure === 'string'
-              ? result.failure
-              : JSON.stringify(result.failure),
-        },
-      };
-    }
-  }
-
-  // Default to success
-  return {
-    status: 'success',
-    result: { success: true, data: toolResult },
-  };
 }
 
 /**
@@ -370,35 +413,38 @@ function parseToolResult(toolResult: unknown): {
  * @param toolResult - Raw tool result
  * @returns Formatted content string
  */
-function formatToolResultContent(toolName: string, toolResult: unknown): string {
+function formatToolResultContent(
+  toolName: string,
+  toolResult: unknown
+): string {
   if (toolResult === null || toolResult === undefined) {
     return `Tool: ${toolName}\nResult: (completed)`;
   }
 
   // Handle Bash results with stdout/stderr
-  if (typeof toolResult === 'object') {
+  if (typeof toolResult === "object") {
     const result = toolResult as Record<string, unknown>;
 
-    if ('stdout' in result || 'stderr' in result) {
+    if ("stdout" in result || "stderr" in result) {
       const parts: string[] = [`Tool: ${toolName}`];
 
-      if (result.stdout && typeof result.stdout === 'string') {
+      if (result.stdout && typeof result.stdout === "string") {
         parts.push(`Output:\n${result.stdout}`);
       }
 
-      if (result.stderr && typeof result.stderr === 'string') {
+      if (result.stderr && typeof result.stderr === "string") {
         parts.push(`Stderr:\n${result.stderr}`);
       }
 
-      if ('exitCode' in result) {
+      if ("exitCode" in result) {
         parts.push(`Exit code: ${result.exitCode}`);
       }
 
-      return parts.join('\n');
+      return parts.join("\n");
     }
 
     // Handle error results
-    if ('error' in result) {
+    if ("error" in result) {
       return `Tool: ${toolName}\nError: ${result.error}`;
     }
   }
@@ -414,15 +460,15 @@ function parseToolAction(toolUse: ToolUseBlock, workDir: string): ActionType {
   const { name, input } = toolUse;
 
   switch (name) {
-    case 'Bash': {
+    case "Bash": {
       const bashInput = input as { command?: string };
       return {
-        kind: 'command_run',
-        command: bashInput.command || '',
+        kind: "command_run",
+        command: bashInput.command || "",
       };
     }
 
-    case 'Edit': {
+    case "Edit": {
       const editInput = input as {
         file_path?: string;
         old_string?: string;
@@ -430,40 +476,40 @@ function parseToolAction(toolUse: ToolUseBlock, workDir: string): ActionType {
       };
       // For Edit, we convert to file_edit with a change
       return {
-        kind: 'file_edit',
-        path: relativizePath(editInput.file_path || '', workDir),
+        kind: "file_edit",
+        path: relativizePath(editInput.file_path || "", workDir),
         changes: [
           {
-            type: 'edit',
+            type: "edit",
             unifiedDiff: createUnifiedDiff(
-              editInput.old_string || '',
-              editInput.new_string || ''
+              editInput.old_string || "",
+              editInput.new_string || ""
             ),
           },
         ],
       };
     }
 
-    case 'Read': {
+    case "Read": {
       const readInput = input as { file_path?: string };
       return {
-        kind: 'file_read',
-        path: relativizePath(readInput.file_path || '', workDir),
+        kind: "file_read",
+        path: relativizePath(readInput.file_path || "", workDir),
       };
     }
 
-    case 'Write': {
+    case "Write": {
       const writeInput = input as { file_path?: string };
       return {
-        kind: 'file_write',
-        path: relativizePath(writeInput.file_path || '', workDir),
+        kind: "file_write",
+        path: relativizePath(writeInput.file_path || "", workDir),
       };
     }
 
     default:
       // MCP tools or unknown tools
       return {
-        kind: 'tool',
+        kind: "tool",
         toolName: name,
         args: input,
       };
@@ -481,7 +527,11 @@ function createUnifiedDiff(oldStr: string, newStr: string): string {
  * Format tool use content for display
  */
 function formatToolUseContent(toolUse: ToolUseBlock): string {
-  return `Tool: ${toolUse.name}\nInput: ${JSON.stringify(toolUse.input, null, 2)}`;
+  return `Tool: ${toolUse.name}\nInput: ${JSON.stringify(
+    toolUse.input,
+    null,
+    2
+  )}`;
 }
 
 /**
@@ -504,14 +554,16 @@ function handleResultMessage(
       index: state.index++,
       timestamp: new Date(),
       type: {
-        kind: 'error',
+        kind: "error",
         error: {
           message: JSON.stringify(message.result),
-          code: 'TASK_ERROR',
+          code: "TASK_ERROR",
         },
       },
       content: `Task failed: ${JSON.stringify(message.result)}`,
-      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
+      metadata: state.sessionId
+        ? { sessionId: state.sessionId, model: state.model }
+        : undefined,
     };
   }
 
@@ -532,7 +584,7 @@ function relativizePath(filePath: string, workDir: string): string {
   try {
     const relative = path.relative(workDir, filePath);
     // Only use relative path if it's shorter and doesn't start with ../..
-    if (relative.length < filePath.length && !relative.startsWith('../..')) {
+    if (relative.length < filePath.length && !relative.startsWith("../..")) {
       return relative;
     }
   } catch {
