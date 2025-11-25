@@ -7,20 +7,56 @@
  * @module agents/codex/executor
  */
 
-import { spawn } from 'child_process';
-import { promisify } from 'util';
-import { exec as execCallback } from 'child_process';
-import { BaseAgentExecutor } from '../base/base-executor.js';
-import type { ExecutionTask } from '../../engine/types.js';
+import { spawn } from "child_process";
+import { promisify } from "util";
+import { exec as execCallback } from "child_process";
+import { BaseAgentExecutor } from "../base/base-executor.js";
+import type { ExecutionTask } from "../../engine/types.js";
 import type {
   SpawnedChild,
   OutputChunk,
   NormalizedEntry,
   AgentCapabilities,
-} from '../types/agent-executor.js';
-import type { CodexConfig } from './types/config.js';
+} from "../types/agent-executor.js";
+import type { CodexConfig } from "./types/config.js";
 
 const exec = promisify(execCallback);
+
+/**
+ * Codex JSONL event types
+ */
+interface CodexThreadStarted {
+  type: "thread.started";
+  thread_id: string;
+}
+
+interface CodexTurnStarted {
+  type: "turn.started";
+}
+
+interface CodexItemCompleted {
+  type: "item.completed";
+  item: {
+    id: string;
+    type: "reasoning" | "agent_message" | "tool_call";
+    text?: string;
+  };
+}
+
+interface CodexTurnCompleted {
+  type: "turn.completed";
+  usage?: {
+    input_tokens: number;
+    cached_input_tokens?: number;
+    output_tokens: number;
+  };
+}
+
+type CodexEvent =
+  | CodexThreadStarted
+  | CodexTurnStarted
+  | CodexItemCompleted
+  | CodexTurnCompleted;
 
 /**
  * Codex CLI executor using JSONL protocol.
@@ -76,42 +112,44 @@ export class CodexExecutor extends BaseAgentExecutor {
     const available = await this.checkAvailability();
     if (!available) {
       throw new Error(
-        'Codex CLI is not available. Please install from https://openai.com/codex'
+        "Codex CLI is not available. Please install from https://openai.com/codex"
       );
     }
 
     // Validate task configuration
     if (!task.workDir) {
-      throw new Error('workDir is required for Codex executor');
+      throw new Error("workDir is required for Codex executor");
     }
 
     // Build command arguments
     const args = this.buildArgs();
 
     // Get executable path
-    const executablePath = this.config.executablePath || 'codex';
+    const executablePath = this.config.executablePath || "codex";
 
     // Spawn process
     let child;
     try {
       child = spawn(executablePath, args, {
         cwd: task.workDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (err) {
       throw new Error(
-        `Failed to spawn codex process: ${err instanceof Error ? err.message : String(err)}`
+        `Failed to spawn codex process: ${
+          err instanceof Error ? err.message : String(err)
+        }`
       );
     }
 
     // Handle spawn errors
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       throw new Error(`Codex process error: ${err.message}`);
     });
 
     // Send prompt to stdin and close immediately
     if (child.stdin) {
-      child.stdin.write(task.prompt + '\n');
+      child.stdin.write(task.prompt + "\n");
       child.stdin.end();
     }
 
@@ -124,45 +162,105 @@ export class CodexExecutor extends BaseAgentExecutor {
   /**
    * Resume a previous task session.
    *
-   * Note: Codex does not currently support session resumption.
-   * This method throws an error.
+   * Uses `codex exec resume <SESSION_ID> <PROMPT>` to continue a previous conversation.
+   * The session ID is the thread_id from a previous execution's thread.started event.
    *
    * @param task - Task with new prompt
-   * @param sessionId - Session ID to resume
-   * @throws {Error} Always throws - Codex doesn't support resume
+   * @param sessionId - Session ID (thread_id) to resume
+   * @returns Spawned child process
+   * @throws {Error} If codex is not available or spawn fails
    */
   async resumeTask(
     task: ExecutionTask,
     sessionId: string
   ): Promise<SpawnedChild> {
-    throw new Error('Codex does not support session resumption');
+    // Check availability first
+    const available = await this.checkAvailability();
+    if (!available) {
+      throw new Error(
+        "Codex CLI is not available. Please install from https://openai.com/codex"
+      );
+    }
+
+    // Validate inputs
+    if (!task.workDir) {
+      throw new Error("workDir is required for Codex executor");
+    }
+    if (!sessionId) {
+      throw new Error("sessionId is required to resume a Codex session");
+    }
+
+    // Build command arguments for resume
+    const args = this.buildResumeArgs(sessionId);
+
+    // Get executable path
+    const executablePath = this.config.executablePath || "codex";
+
+    // Spawn process
+    let child;
+    try {
+      child = spawn(executablePath, args, {
+        cwd: task.workDir,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (err) {
+      throw new Error(
+        `Failed to spawn codex process: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+
+    // Handle spawn errors
+    child.on("error", (err) => {
+      throw new Error(`Codex process error: ${err.message}`);
+    });
+
+    // Send prompt to stdin and close immediately
+    if (child.stdin) {
+      child.stdin.write(task.prompt + "\n");
+      child.stdin.end();
+    }
+
+    // Wrap child process to ManagedProcess
+    return {
+      process: this.wrapChildProcess(child),
+    };
   }
 
   /**
    * Normalize Codex JSONL output to unified format.
    *
    * Parses line-delimited JSON from Codex CLI and converts to
-   * normalized entries.
+   * normalized entries. Captures thread_id as sessionId for session tracking.
+   *
+   * Event types:
+   * - thread.started: Contains thread_id (session ID)
+   * - turn.started: Turn begins
+   * - item.completed: Agent message, reasoning, or tool call completed
+   * - turn.completed: Turn ends with usage stats
    *
    * @param outputStream - Stream of output chunks
-   * @param workDir - Working directory for path resolution
+   * @param _workDir - Working directory for path resolution
    * @returns Async iterable of normalized entries
    */
   async *normalizeOutput(
     outputStream: AsyncIterable<OutputChunk>,
-    workDir: string
+    _workDir: string
   ): AsyncIterable<NormalizedEntry> {
-    let buffer = '';
+    let buffer = "";
     let index = 0;
+    let sessionId: string | null = null;
+    let model: string | null = this.config.model || null;
 
     for await (const chunk of outputStream) {
-      if (chunk.type !== 'stdout') {
+      if (chunk.type !== "stdout") {
         continue;
       }
 
-      buffer += chunk.data.toString('utf-8');
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      buffer += chunk.data.toString("utf-8");
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
       for (const line of lines) {
         if (!line.trim()) {
@@ -170,28 +268,72 @@ export class CodexExecutor extends BaseAgentExecutor {
         }
 
         try {
-          const parsed = JSON.parse(line);
+          const parsed = JSON.parse(line) as CodexEvent;
 
-          // Convert Codex JSON events to normalized entries
-          // For now, just emit as assistant message
-          // TODO: Implement proper Codex event parsing
-          yield {
-            index: index++,
-            timestamp: chunk.timestamp,
-            type: {
-              kind: 'assistant_message',
-            },
-            content: typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2),
-          };
+          // Handle different event types
+          switch (parsed.type) {
+            case "thread.started":
+              // Capture session ID from thread_id
+              sessionId = parsed.thread_id;
+              yield {
+                index: index++,
+                timestamp: chunk.timestamp,
+                type: { kind: "system_message" },
+                content: `Session: ${sessionId}${
+                  model ? `, Model: ${model}` : ""
+                }`,
+                metadata: { sessionId, model },
+              };
+              break;
+
+            case "turn.started":
+              // Turn started - no visible output needed
+              break;
+
+            case "item.completed":
+              // Handle different item types
+              if (parsed.item.type === "agent_message" && parsed.item.text) {
+                yield {
+                  index: index++,
+                  timestamp: chunk.timestamp,
+                  type: { kind: "assistant_message" },
+                  content: parsed.item.text,
+                  metadata: sessionId ? { sessionId, model } : undefined,
+                };
+              } else if (parsed.item.type === "reasoning" && parsed.item.text) {
+                yield {
+                  index: index++,
+                  timestamp: chunk.timestamp,
+                  type: { kind: "thinking", reasoning: parsed.item.text },
+                  content: parsed.item.text,
+                  metadata: sessionId ? { sessionId, model } : undefined,
+                };
+              }
+              // TODO: Handle tool_call items
+              break;
+
+            case "turn.completed":
+              // Turn completed - no visible output needed
+              break;
+
+            default:
+              // Unknown event type - emit as raw content for debugging
+              yield {
+                index: index++,
+                timestamp: chunk.timestamp,
+                type: { kind: "assistant_message" },
+                content: JSON.stringify(parsed, null, 2),
+                metadata: sessionId ? { sessionId, model } : undefined,
+              };
+          }
         } catch {
           // If not JSON, emit as assistant message
           yield {
             index: index++,
             timestamp: chunk.timestamp,
-            type: {
-              kind: 'assistant_message',
-            },
+            type: { kind: "assistant_message" },
             content: line,
+            metadata: sessionId ? { sessionId, model } : undefined,
           };
         }
       }
@@ -202,10 +344,9 @@ export class CodexExecutor extends BaseAgentExecutor {
       yield {
         index: index++,
         timestamp: new Date(),
-        type: {
-          kind: 'assistant_message',
-        },
+        type: { kind: "assistant_message" },
         content: buffer,
+        metadata: sessionId ? { sessionId, model } : undefined,
       };
     }
   }
@@ -217,11 +358,11 @@ export class CodexExecutor extends BaseAgentExecutor {
    */
   getCapabilities(): AgentCapabilities {
     return {
-      supportsSessionResume: false, // TODO: Implement resume support
+      supportsSessionResume: true, // Supports `codex exec resume <SESSION_ID>`
       requiresSetup: true, // Needs codex login or API key
       supportsApprovals: true, // Supports --dangerously-bypass-approvals-and-sandbox
       supportsMcp: true, // Codex has MCP support
-      protocol: 'jsonl', // Line-delimited JSON output
+      protocol: "jsonl", // Line-delimited JSON output
     };
   }
 
@@ -234,9 +375,9 @@ export class CodexExecutor extends BaseAgentExecutor {
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      const executablePath = this.config.executablePath || 'codex';
+      const executablePath = this.config.executablePath || "codex";
       const command =
-        process.platform === 'win32'
+        process.platform === "win32"
           ? `where ${executablePath}`
           : `which ${executablePath}`;
 
@@ -254,28 +395,59 @@ export class CodexExecutor extends BaseAgentExecutor {
    * @private
    */
   private buildArgs(): string[] {
-    const args = ['exec'];
+    const args = ["exec"];
 
     // Add '-' to read prompt from stdin (prevents blocking message)
-    args.push('-');
+    args.push("-");
 
     // Add --json flag for structured output (default: true)
     if (this.config.json !== false) {
-      args.push('--json');
+      args.push("--json");
     }
 
     // Add --model if specified
     if (this.config.model) {
-      args.push('--model', this.config.model);
+      args.push("--model", this.config.model);
     }
 
     // Add approval bypass flag
     if (this.config.autoApprove !== false) {
       // Default to full auto-approval bypass
-      args.push('--dangerously-bypass-approvals-and-sandbox');
+      args.push("--dangerously-bypass-approvals-and-sandbox");
     } else {
       // Use safer automation mode
-      args.push('--full-auto');
+      args.push("--full-auto");
+    }
+
+    return args;
+  }
+
+  /**
+   * Build arguments for resuming a session.
+   *
+   * @param sessionId - Session ID to resume
+   * @returns Array of command-line arguments
+   * @private
+   */
+  private buildResumeArgs(sessionId: string): string[] {
+    // Use 'exec resume' subcommand with session ID and '-' for stdin prompt
+    const args = ["exec", "resume", sessionId, "-"];
+
+    // Add --json flag for structured output (default: true)
+    if (this.config.json !== false) {
+      args.push("--json");
+    }
+
+    // Add --model if specified
+    if (this.config.model) {
+      args.push("--model", this.config.model);
+    }
+
+    // Add approval bypass flag
+    if (this.config.autoApprove !== false) {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    } else {
+      args.push("--full-auto");
     }
 
     return args;
