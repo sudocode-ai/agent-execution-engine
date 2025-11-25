@@ -295,6 +295,22 @@ describe.skipIf(SKIP_E2E)('E2E: CopilotExecutor with Real CLI', () => {
     expect(kinds).toContain('assistant_message');
   }, 60000);
 
+  /**
+   * NOTE: Tool Status Tracking is NOT applicable to Copilot.
+   *
+   * GitHub Copilot CLI uses a plain text streaming protocol without structured
+   * tool use events. This is a known limitation documented in the executor:
+   * - "No structured output (no tool call tracking, no diffs)"
+   *
+   * The CopilotExecutor only emits 'assistant_message' entries for all output.
+   * Tool status tracking (running -> success/failed) requires structured JSON
+   * output like Claude (stream-json) or Cursor (jsonl) provide.
+   *
+   * If Copilot CLI adds structured output support in the future, tool status
+   * tracking tests should be added here similar to claude-executor.test.ts
+   * and cursor-executor.test.ts.
+   */
+
   it('should verify capabilities are correct', () => {
     const executor = new CopilotExecutor({
       allowAllTools: true,

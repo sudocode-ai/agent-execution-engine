@@ -261,6 +261,77 @@ describe.skipIf(SKIP_E2E)('E2E: Real OpenAI Codex Execution', () => {
     }, 180000); // 3 minute timeout for workflow
   });
 
+  describe('Tool Status Tracking', () => {
+    /**
+     * NOTE: Codex tool status tracking is not yet implemented.
+     *
+     * The CodexExecutor currently has a TODO in normalizeOutput() to implement
+     * proper Codex event parsing. All output is currently emitted as assistant_message.
+     *
+     * Once Codex JSON event schema documentation is available, this test should be
+     * updated to verify:
+     * 1. Tool use entries are created with status: 'running'
+     * 2. Tool completion events update status to 'success' or 'failed'
+     * 3. Tool results are properly captured
+     *
+     * See: src/agents/codex/executor.ts:177 for the TODO
+     */
+    it.skip('should track tool status from running to success/failed (NOT YET IMPLEMENTED)', async () => {
+      // This test is skipped until Codex normalizer is fully implemented
+      // with proper tool_use event parsing similar to Claude and Cursor normalizers
+
+      const processConfig = adapter.buildProcessConfig({
+        codexPath: CODEX_PATH,
+        workDir: tempDir,
+        exec: true,
+        json: true,
+        fullAuto: true,
+        skipGitRepoCheck: true,
+      });
+
+      const processManager = createProcessManager({
+        ...processConfig,
+        mode: 'structured',
+        timeout: 60000,
+      });
+
+      const engine = new SimpleExecutionEngine(processManager, {
+        maxConcurrent: 1,
+        defaultProcessConfig: processConfig,
+      });
+
+      try {
+        const task: ExecutionTask = {
+          id: 'test-tool-status',
+          type: 'issue',
+          prompt: 'List the files in the current directory using ls command',
+          workDir: tempDir,
+          priority: 0,
+          dependencies: [],
+          config: {},
+          createdAt: new Date(),
+        };
+
+        const taskId = await engine.submitTask(task);
+        const result = await engine.waitForTask(taskId);
+
+        // When implemented, verify:
+        // 1. result.output contains tool_use entries
+        // 2. Tool entries transition from running -> success/failed
+        // 3. Tool results contain command output
+
+        expect(result).toBeDefined();
+        expect(result.success).toBe(true);
+
+        // TODO: Add assertions for tool status tracking once implemented
+        // const toolEntries = parseToolEntries(result.output);
+        // expect(toolEntries.some(t => t.status === 'success' || t.status === 'failed')).toBe(true);
+      } finally {
+        await engine.shutdown();
+      }
+    }, 120000);
+  });
+
   describe('Agent Adapter Integration', () => {
     it('uses CodexAdapter to validate config', () => {
       // Test validation

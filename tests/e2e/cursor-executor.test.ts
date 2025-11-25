@@ -272,6 +272,90 @@ describe.skipIf(SKIP_E2E)('E2E: CursorExecutor with Real CLI', () => {
     expect(shellTools.length).toBeGreaterThan(0);
   }, 30000);
 
+  it('should track tool status from running to success/failed', async () => {
+    const executor = new CursorExecutor({
+      force: true,
+      model: 'auto',
+    });
+
+    const task: ExecutionTask = {
+      id: 'e2e-tool-status-test',
+      type: 'custom',
+      prompt: 'Run: echo "hello world"',
+      workDir: tempDir,
+      config: {},
+    };
+
+    const result = await executor.executeTask(task);
+    const outputStream = createOutputStream(result.process);
+
+    const entries = [];
+    const toolStatusByIndex = new Map<number, string[]>();
+
+    const timeout = setTimeout(() => {
+      if (result.process.status === 'busy') {
+        result.process.process.kill('SIGTERM');
+      }
+    }, 25000);
+
+    try {
+      for await (const entry of executor.normalizeOutput(
+        outputStream,
+        tempDir
+      )) {
+        entries.push(entry);
+
+        // Track tool status changes by index
+        if (entry.type.kind === 'tool_use') {
+          const statuses = toolStatusByIndex.get(entry.index) || [];
+          statuses.push(entry.type.tool.status);
+          toolStatusByIndex.set(entry.index, statuses);
+        }
+
+        // Stop after collecting enough entries or finding a completed tool
+        const hasCompletedTool = Array.from(toolStatusByIndex.values()).some(
+          (statuses) => statuses.includes('success') || statuses.includes('failed')
+        );
+        if (entries.length >= 40 || hasCompletedTool) {
+          break;
+        }
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (result.process.status === 'busy') {
+        result.process.process.kill('SIGTERM');
+      }
+    }
+
+    // Verify we got tool entries with status transitions
+    const toolEntries = entries.filter((e) => e.type.kind === 'tool_use');
+    expect(toolEntries.length).toBeGreaterThan(0);
+
+    // Check that at least one tool has status transition from running to success/failed
+    let foundStatusTransition = false;
+    for (const [index, statuses] of toolStatusByIndex) {
+      if (statuses.includes('running') && (statuses.includes('success') || statuses.includes('failed'))) {
+        foundStatusTransition = true;
+
+        // Verify the transition order: running should come before success/failed
+        const runningIdx = statuses.indexOf('running');
+        const successIdx = statuses.indexOf('success');
+        const failedIdx = statuses.indexOf('failed');
+        const finalIdx = successIdx >= 0 ? successIdx : failedIdx;
+
+        if (finalIdx >= 0) {
+          expect(runningIdx).toBeLessThan(finalIdx);
+        }
+        break;
+      }
+    }
+
+    // If tool was used, expect status transition
+    if (toolStatusByIndex.size > 0) {
+      expect(foundStatusTransition).toBe(true);
+    }
+  }, 35000);
+
   it('should execute edit operation on a file', async () => {
     const executor = new CursorExecutor({
       force: true,

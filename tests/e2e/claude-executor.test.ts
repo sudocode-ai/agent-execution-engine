@@ -201,6 +201,166 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
     }, 60000);
   });
 
+  describe('Tool Status Tracking', () => {
+    it('should update tool status from running to success/failed on completion', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: tempDir,
+        executablePath: CLAUDE_PATH,
+        print: true,
+        outputFormat: 'stream-json',
+        dangerouslySkipPermissions: true,
+      };
+
+      const executor = new ClaudeCodeExecutor(config);
+
+      // Test with simulated stream-json messages that include tool_use completion
+      const sampleMessages = [
+        // System message
+        JSON.stringify({
+          type: 'system',
+          sessionId: 'test-session',
+          model: 'claude-sonnet-4',
+        }) + '\n',
+        // Assistant message with tool_use block
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tool-test-123',
+                name: 'Bash',
+                input: { command: 'echo hello' },
+              },
+            ],
+          },
+        }) + '\n',
+        // Tool use completion message
+        JSON.stringify({
+          type: 'tool_use',
+          subtype: 'completed',
+          toolUseId: 'tool-test-123',
+          toolName: 'Bash',
+          toolResult: { stdout: 'hello\n', exitCode: 0 },
+        }) + '\n',
+      ];
+
+      async function* createOutputStream() {
+        for (const msg of sampleMessages) {
+          yield {
+            data: Buffer.from(msg),
+            type: 'stdout' as const,
+            timestamp: new Date(),
+          };
+        }
+      }
+
+      const normalizedEntries = [];
+      for await (const entry of executor.normalizeOutput(
+        createOutputStream(),
+        tempDir
+      )) {
+        normalizedEntries.push(entry);
+      }
+
+      // Find tool_use entries
+      const toolEntries = normalizedEntries.filter(
+        (e) => e.type.kind === 'tool_use'
+      );
+
+      expect(toolEntries.length).toBe(2); // One for start, one for completion
+
+      // First entry should be running
+      expect(toolEntries[0].type.kind).toBe('tool_use');
+      if (toolEntries[0].type.kind === 'tool_use') {
+        expect(toolEntries[0].type.tool.status).toBe('running');
+        expect(toolEntries[0].type.tool.toolName).toBe('Bash');
+      }
+
+      // Second entry should be success (same index, updated status)
+      expect(toolEntries[1].type.kind).toBe('tool_use');
+      if (toolEntries[1].type.kind === 'tool_use') {
+        expect(toolEntries[1].type.tool.status).toBe('success');
+        expect(toolEntries[1].type.tool.result).toBeDefined();
+        expect(toolEntries[1].type.tool.result!.success).toBe(true);
+        // Same index as start entry (update in place)
+        expect(toolEntries[1].index).toBe(toolEntries[0].index);
+      }
+    }, 10000);
+
+    it('should set tool status to failed on error result', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: tempDir,
+        executablePath: CLAUDE_PATH,
+        print: true,
+        outputFormat: 'stream-json',
+        dangerouslySkipPermissions: true,
+      };
+
+      const executor = new ClaudeCodeExecutor(config);
+
+      const sampleMessages = [
+        JSON.stringify({
+          type: 'system',
+          sessionId: 'test-session',
+        }) + '\n',
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'tool-fail-456',
+                name: 'Bash',
+                input: { command: 'exit 1' },
+              },
+            ],
+          },
+        }) + '\n',
+        JSON.stringify({
+          type: 'tool_use',
+          subtype: 'completed',
+          toolUseId: 'tool-fail-456',
+          toolName: 'Bash',
+          toolResult: { stderr: 'command failed', exitCode: 1 },
+        }) + '\n',
+      ];
+
+      async function* createOutputStream() {
+        for (const msg of sampleMessages) {
+          yield {
+            data: Buffer.from(msg),
+            type: 'stdout' as const,
+            timestamp: new Date(),
+          };
+        }
+      }
+
+      const normalizedEntries = [];
+      for await (const entry of executor.normalizeOutput(
+        createOutputStream(),
+        tempDir
+      )) {
+        normalizedEntries.push(entry);
+      }
+
+      const toolEntries = normalizedEntries.filter(
+        (e) => e.type.kind === 'tool_use'
+      );
+
+      expect(toolEntries.length).toBe(2);
+
+      // Second entry should be failed
+      if (toolEntries[1].type.kind === 'tool_use') {
+        expect(toolEntries[1].type.tool.status).toBe('failed');
+        expect(toolEntries[1].type.tool.result!.success).toBe(false);
+        expect(toolEntries[1].type.tool.result!.error).toContain('exit');
+      }
+    }, 10000);
+  });
+
   describe('Output Normalization', () => {
     it('should provide normalizeOutput method for stream processing', async () => {
       const config: ClaudeCodeConfig = {

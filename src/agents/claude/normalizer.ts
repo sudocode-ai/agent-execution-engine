@@ -221,16 +221,171 @@ function extractAssistantContent(content: ContentBlock[]): string {
  * Handle tool use message
  *
  * Tool use messages are lifecycle events (started/completed).
- * For now, we skip these since the actual tool details come from
- * AssistantMessage with tool_use blocks.
+ * - 'started' events are skipped (we already created the entry from AssistantMessage)
+ * - 'completed' events update the existing entry with success/failed status and result
  */
 function handleToolUseMessage(
   message: ToolUseMessage,
   workDir: string,
   state: NormalizerState
 ): NormalizedEntry | null {
-  // Skip lifecycle events - we get tool details from AssistantMessage
+  // Skip 'started' events - we get tool details from AssistantMessage
+  if (message.subtype === 'started') {
+    return null;
+  }
+
+  // Handle 'completed' events - update the existing tool entry
+  if (message.subtype === 'completed' && message.toolUseId) {
+    const entryIndex = state.toolUseMap.get(message.toolUseId);
+
+    if (entryIndex === undefined) {
+      // No matching started entry found - skip
+      return null;
+    }
+
+    // Determine status from result
+    const { status, result } = parseToolResult(message.toolResult);
+
+    // Get the tool name from the message (may not always be present)
+    const toolName = message.toolName || 'unknown';
+
+    // Format the result content
+    const content = formatToolResultContent(toolName, message.toolResult);
+
+    return {
+      index: entryIndex, // Same index as the original tool_use entry
+      timestamp: new Date(),
+      type: {
+        kind: 'tool_use',
+        tool: {
+          toolName,
+          action: { kind: 'tool', toolName, result: message.toolResult },
+          status,
+          result,
+        },
+      },
+      content,
+    };
+  }
+
   return null;
+}
+
+/**
+ * Parse tool result to determine status and structured result
+ *
+ * @param toolResult - Raw tool result from Claude
+ * @returns Object with status and structured result
+ */
+function parseToolResult(toolResult: unknown): {
+  status: 'success' | 'failed';
+  result: { success: boolean; data?: unknown; error?: string };
+} {
+  // Handle null/undefined results
+  if (toolResult === null || toolResult === undefined) {
+    return {
+      status: 'success',
+      result: { success: true },
+    };
+  }
+
+  // Check for error indicators in the result
+  if (typeof toolResult === 'object') {
+    const result = toolResult as Record<string, unknown>;
+
+    // Check for explicit error field
+    if ('error' in result || 'isError' in result) {
+      const errorMessage =
+        typeof result.error === 'string'
+          ? result.error
+          : typeof result.message === 'string'
+            ? result.message
+            : JSON.stringify(result);
+      return {
+        status: 'failed',
+        result: { success: false, error: errorMessage },
+      };
+    }
+
+    // Check for Bash command failure (non-zero exit code)
+    if ('exitCode' in result && typeof result.exitCode === 'number') {
+      if (result.exitCode !== 0) {
+        return {
+          status: 'failed',
+          result: {
+            success: false,
+            data: toolResult,
+            error: `Command exited with code ${result.exitCode}`,
+          },
+        };
+      }
+    }
+
+    // Check for failure field (some tools use this)
+    if ('failure' in result) {
+      return {
+        status: 'failed',
+        result: {
+          success: false,
+          data: toolResult,
+          error:
+            typeof result.failure === 'string'
+              ? result.failure
+              : JSON.stringify(result.failure),
+        },
+      };
+    }
+  }
+
+  // Default to success
+  return {
+    status: 'success',
+    result: { success: true, data: toolResult },
+  };
+}
+
+/**
+ * Format tool result content for display
+ *
+ * @param toolName - Name of the tool
+ * @param toolResult - Raw tool result
+ * @returns Formatted content string
+ */
+function formatToolResultContent(toolName: string, toolResult: unknown): string {
+  if (toolResult === null || toolResult === undefined) {
+    return `Tool: ${toolName}\nResult: (completed)`;
+  }
+
+  // Handle Bash results with stdout/stderr
+  if (typeof toolResult === 'object') {
+    const result = toolResult as Record<string, unknown>;
+
+    if ('stdout' in result || 'stderr' in result) {
+      const parts: string[] = [`Tool: ${toolName}`];
+
+      if (result.stdout && typeof result.stdout === 'string') {
+        parts.push(`Output:\n${result.stdout}`);
+      }
+
+      if (result.stderr && typeof result.stderr === 'string') {
+        parts.push(`Stderr:\n${result.stderr}`);
+      }
+
+      if ('exitCode' in result) {
+        parts.push(`Exit code: ${result.exitCode}`);
+      }
+
+      return parts.join('\n');
+    }
+
+    // Handle error results
+    if ('error' in result) {
+      return `Tool: ${toolName}\nError: ${result.error}`;
+    }
+  }
+
+  // Default: stringify the result
+  return `Tool: ${toolName}\nResult: ${JSON.stringify(toolResult, null, 2)}`;
 }
 
 /**
