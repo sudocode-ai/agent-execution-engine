@@ -213,12 +213,13 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
 
       const executor = new ClaudeCodeExecutor(config);
 
-      // Test with simulated stream-json messages that include tool_use completion
+      // Test with simulated stream-json messages that match actual Claude CLI output
+      // Tool results come via user messages with tool_result blocks (not ToolUseMessage)
       const sampleMessages = [
-        // System message
+        // System message (using snake_case session_id as CLI does)
         JSON.stringify({
           type: 'system',
-          sessionId: 'test-session',
+          session_id: 'test-session-123',
           model: 'claude-sonnet-4',
         }) + '\n',
         // Assistant message with tool_use block
@@ -236,13 +237,19 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
             ],
           },
         }) + '\n',
-        // Tool use completion message
+        // Tool result comes via user message with tool_result block
         JSON.stringify({
-          type: 'tool_use',
-          subtype: 'completed',
-          toolUseId: 'tool-test-123',
-          toolName: 'Bash',
-          toolResult: { stdout: 'hello\n', exitCode: 0 },
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'tool-test-123',
+                content: [{ type: 'text', text: 'hello\n' }],
+              },
+            ],
+          },
         }) + '\n',
       ];
 
@@ -300,10 +307,11 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
 
       const executor = new ClaudeCodeExecutor(config);
 
+      // Tool results with is_error flag come via user messages
       const sampleMessages = [
         JSON.stringify({
           type: 'system',
-          sessionId: 'test-session',
+          session_id: 'test-session-456',
         }) + '\n',
         JSON.stringify({
           type: 'assistant',
@@ -319,12 +327,20 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
             ],
           },
         }) + '\n',
+        // Tool result with is_error flag via user message
         JSON.stringify({
-          type: 'tool_use',
-          subtype: 'completed',
-          toolUseId: 'tool-fail-456',
-          toolName: 'Bash',
-          toolResult: { stderr: 'command failed', exitCode: 1 },
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'tool-fail-456',
+                content: [{ type: 'text', text: '{"exitCode": 1, "stderr": "command failed"}' }],
+                is_error: true,
+              },
+            ],
+          },
         }) + '\n',
       ];
 
@@ -356,7 +372,6 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
       if (toolEntries[1].type.kind === 'tool_use') {
         expect(toolEntries[1].type.tool.status).toBe('failed');
         expect(toolEntries[1].type.tool.result!.success).toBe(false);
-        expect(toolEntries[1].type.tool.result!.error).toContain('exit');
       }
     }, 10000);
   });

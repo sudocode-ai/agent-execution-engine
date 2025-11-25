@@ -113,19 +113,22 @@ function createSystemMessage(
   message: SystemMessage,
   state: NormalizerState
 ): NormalizedEntry {
+  // Handle both snake_case (from CLI) and camelCase (for backwards compatibility)
+  const sessionId = message.session_id || message.sessionId;
+
   // Capture session ID and model for all subsequent messages
-  state.sessionId = message.sessionId;
+  state.sessionId = sessionId || null;
   state.model = message.model || null;
 
   return {
     index: state.index++,
     timestamp: new Date(),
     type: { kind: "system_message" },
-    content: `Session: ${message.sessionId}${
+    content: `Session: ${sessionId || "unknown"}${
       message.model ? `, Model: ${message.model}` : ""
     }`,
     metadata: {
-      sessionId: message.sessionId,
+      sessionId: sessionId,
       model: message.model,
     },
   };

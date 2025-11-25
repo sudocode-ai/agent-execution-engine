@@ -58,22 +58,34 @@ export interface ToolResultBlock {
  *
  * Sent at the start of execution to provide session metadata.
  *
+ * Note: Claude CLI uses snake_case for field names (session_id, mcp_servers)
+ * but we also support camelCase for backwards compatibility.
+ *
  * @example
  * ```json
  * {
  *   "type": "system",
  *   "subtype": "init",
- *   "sessionId": "sess-abc123",
+ *   "session_id": "sess-abc123",
  *   "model": "claude-sonnet-4",
- *   "mcpServers": [{"name": "filesystem", "status": "connected"}]
+ *   "mcp_servers": [{"name": "filesystem", "status": "connected"}]
  * }
  * ```
  */
 export interface SystemMessage extends BaseMessage {
   type: "system";
   subtype?: "init" | "session_start";
-  sessionId: string;
+  /** Session ID (snake_case from CLI) */
+  session_id?: string;
+  /** Session ID (camelCase for backwards compatibility) */
+  sessionId?: string;
   model?: string;
+  /** MCP servers (snake_case from CLI) */
+  mcp_servers?: Array<{
+    name: string;
+    status: string;
+  }>;
+  /** MCP servers (camelCase for backwards compatibility) */
   mcpServers?: Array<{
     name: string;
     status: string;

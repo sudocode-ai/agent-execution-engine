@@ -723,7 +723,7 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
   });
 
   describe('Standardized Metadata', () => {
-    it('should include sessionId and model in system message metadata', () => {
+    it('should include sessionId and model in system message metadata (camelCase)', () => {
       const state = createNormalizerState();
       const message: SystemMessage = {
         type: 'system',
@@ -737,6 +737,39 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
       expect(entry!.metadata).toBeDefined();
       expect(entry!.metadata!.sessionId).toBe('sess-abc-123');
       expect(entry!.metadata!.model).toBe('claude-sonnet-4');
+    });
+
+    it('should include sessionId from snake_case session_id (CLI format)', () => {
+      const state = createNormalizerState();
+      // This is how Claude CLI actually sends the message
+      const message: SystemMessage = {
+        type: 'system',
+        session_id: '9f9632ea-b27e-4897-85c8-5389565478ca',
+        model: 'claude-sonnet-4-5-20250929',
+      };
+
+      const entry = normalizeMessage(message, workDir, state);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata).toBeDefined();
+      expect(entry!.metadata!.sessionId).toBe('9f9632ea-b27e-4897-85c8-5389565478ca');
+      expect(entry!.metadata!.model).toBe('claude-sonnet-4-5-20250929');
+      expect(entry!.content).toContain('9f9632ea-b27e-4897-85c8-5389565478ca');
+    });
+
+    it('should prefer session_id over sessionId when both present', () => {
+      const state = createNormalizerState();
+      const message: SystemMessage = {
+        type: 'system',
+        session_id: 'snake-case-id',
+        sessionId: 'camel-case-id',
+        model: 'claude-sonnet-4',
+      };
+
+      const entry = normalizeMessage(message, workDir, state);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata!.sessionId).toBe('snake-case-id');
     });
 
     it('should include metadata in all message types after system message', () => {
