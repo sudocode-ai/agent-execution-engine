@@ -35,6 +35,10 @@ interface NormalizerState {
   activeMessage: { index: number; content: string } | null;
   /** Map of tool_use_id to entry index */
   toolUseMap: Map<string, number>;
+  /** Session ID captured from system message */
+  sessionId: string | null;
+  /** Model captured from system message */
+  model: string | null;
 }
 
 /**
@@ -45,6 +49,8 @@ export function createNormalizerState(): NormalizerState {
     index: 0,
     activeMessage: null,
     toolUseMap: new Map(),
+    sessionId: null,
+    model: null,
   };
 }
 
@@ -96,11 +102,19 @@ function createSystemMessage(
   message: SystemMessage,
   state: NormalizerState
 ): NormalizedEntry {
+  // Capture session ID and model for all subsequent messages
+  state.sessionId = message.sessionId;
+  state.model = message.model || null;
+
   return {
     index: state.index++,
     timestamp: new Date(),
     type: { kind: 'system_message' },
     content: `Session: ${message.sessionId}${message.model ? `, Model: ${message.model}` : ''}`,
+    metadata: {
+      sessionId: message.sessionId,
+      model: message.model,
+    },
   };
 }
 
@@ -127,6 +141,7 @@ function createUserMessage(
     timestamp: new Date(),
     type: { kind: 'user_message' },
     content,
+    metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
   };
 }
 
@@ -174,6 +189,7 @@ function handleAssistantMessage(
         },
       },
       content: formatToolUseContent(toolUse),
+      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
     };
   }
 
@@ -190,6 +206,7 @@ function handleAssistantMessage(
       timestamp: new Date(),
       type: { kind: 'assistant_message' },
       content: state.activeMessage.content,
+      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
     };
   }
 
@@ -204,6 +221,7 @@ function handleAssistantMessage(
     timestamp: new Date(),
     type: { kind: 'assistant_message' },
     content,
+    metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
   };
 }
 
@@ -265,6 +283,7 @@ function handleToolUseMessage(
         },
       },
       content,
+      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
     };
   }
 
@@ -492,6 +511,7 @@ function handleResultMessage(
         },
       },
       content: `Task failed: ${JSON.stringify(message.result)}`,
+      metadata: state.sessionId ? { sessionId: state.sessionId, model: state.model } : undefined,
     };
   }
 

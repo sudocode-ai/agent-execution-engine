@@ -49,6 +49,12 @@ export class CursorNormalizationState {
   /** Whether session ID has been reported (report once) */
   private sessionIdReported: boolean = false;
 
+  /** Current session ID (captured from system message) */
+  private sessionId: string | null = null;
+
+  /** Current model (captured from system message) */
+  private model: string | null = null;
+
   /**
    * Get next entry index and increment counter.
    *
@@ -56,6 +62,30 @@ export class CursorNormalizationState {
    */
   nextIndex(): number {
     return this.entryIndex++;
+  }
+
+  /**
+   * Get standardized metadata for entries.
+   *
+   * Returns metadata with sessionId and model if available.
+   *
+   * @returns Metadata object or undefined if no metadata available
+   */
+  private getMetadata() {
+    if (!this.sessionId && !this.model) {
+      return undefined;
+    }
+
+    // Build metadata object, only including fields that are set
+    const metadata: Record<string, unknown> = {};
+    if (this.sessionId) {
+      metadata.sessionId = this.sessionId;
+    }
+    if (this.model) {
+      metadata.model = this.model;
+    }
+
+    return metadata;
   }
 
   /**
@@ -71,6 +101,14 @@ export class CursorNormalizationState {
     // Close any active streaming messages
     this.assistantMessage = undefined;
     this.thinkingMessage = undefined;
+
+    // Capture session ID and model for metadata
+    if (message.session_id) {
+      this.sessionId = message.session_id;
+    }
+    if (message.model) {
+      this.model = message.model;
+    }
 
     // Build content parts
     const parts: string[] = [];
@@ -97,11 +135,24 @@ export class CursorNormalizationState {
       return null;
     }
 
+    // Build metadata
+    const metadata: Record<string, unknown> = {};
+    if (this.sessionId) {
+      metadata.sessionId = this.sessionId;
+    }
+    if (this.model) {
+      metadata.model = this.model;
+    }
+    if (message.permission_mode) {
+      metadata.permissionMode = message.permission_mode;
+    }
+
     return {
       index: this.nextIndex(),
       timestamp: new Date(),
       type: { kind: 'system_message' },
       content: parts.join(', '),
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     };
   }
 
@@ -125,6 +176,7 @@ export class CursorNormalizationState {
       timestamp: new Date(),
       type: { kind: 'user_message' },
       content,
+      metadata: this.getMetadata(),
     };
   }
 
@@ -152,6 +204,7 @@ export class CursorNormalizationState {
         timestamp: new Date(),
         type: { kind: 'assistant_message' },
         content: this.assistantMessage.content,
+        metadata: this.getMetadata(),
       };
     }
 
@@ -164,6 +217,7 @@ export class CursorNormalizationState {
       timestamp: new Date(),
       type: { kind: 'assistant_message' },
       content: chunk,
+      metadata: this.getMetadata(),
     };
   }
 
@@ -196,6 +250,7 @@ export class CursorNormalizationState {
         timestamp: new Date(),
         type: { kind: 'thinking' },
         content: this.thinkingMessage.content,
+        metadata: this.getMetadata(),
       };
     }
 
@@ -208,6 +263,7 @@ export class CursorNormalizationState {
       timestamp: new Date(),
       type: { kind: 'thinking' },
       content: chunk,
+      metadata: this.getMetadata(),
     };
   }
 
@@ -245,6 +301,7 @@ export class CursorNormalizationState {
             ? message.result
             : JSON.stringify(message.result)
         }`,
+        metadata: this.getMetadata(),
       };
     }
 
@@ -287,6 +344,7 @@ export class CursorNormalizationState {
         },
       },
       content,
+      metadata: this.getMetadata(),
     };
 
     // Track call_id → entry for result merging
@@ -338,6 +396,7 @@ export class CursorNormalizationState {
           },
         },
         content,
+        metadata: this.getMetadata(),
       };
     }
 
@@ -364,6 +423,7 @@ export class CursorNormalizationState {
         },
       },
       content,
+      metadata: this.getMetadata(),
     };
   }
 

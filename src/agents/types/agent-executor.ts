@@ -101,6 +101,46 @@ export interface SpawnedChild {
 }
 
 /**
+ * Standardized metadata for normalized entries
+ *
+ * Common metadata fields that all agents should populate (when available).
+ * Ensures consistent metadata format across different agent implementations.
+ */
+export interface NormalizedEntryMetadata {
+  /**
+   * Session ID for the current execution
+   *
+   * Used for resuming sessions. Not all agents support session resumption.
+   * - Claude Code: Always available (e.g., "sess-abc-123")
+   * - Cursor: Available (e.g., "sess-xyz-789")
+   * - Copilot: Available after discovery (e.g., "uuid-format")
+   * - Codex: Not supported (null)
+   */
+  sessionId?: string | null;
+
+  /**
+   * Model name used for this execution
+   *
+   * - Claude Code: e.g., "claude-sonnet-4"
+   * - Cursor: e.g., "claude-sonnet-4.5", "gpt-4o"
+   * - Copilot: e.g., "gpt-4o", "claude-sonnet-4"
+   * - Codex: e.g., "gpt-5-codex"
+   */
+  model?: string | null;
+
+  /**
+   * Agent-specific custom metadata
+   *
+   * Escape hatch for agent-specific data that doesn't fit the standard fields.
+   * Examples:
+   * - Permission modes
+   * - MCP server status
+   * - Custom configuration
+   */
+  [key: string]: unknown;
+}
+
+/**
  * Normalized output entry
  *
  * Unified output format that all agents convert to. Enables consistent
@@ -119,8 +159,8 @@ export interface NormalizedEntry {
   /** Main content in markdown format */
   content: string;
 
-  /** Optional agent-specific metadata (escape hatch for custom data) */
-  metadata?: Record<string, unknown>;
+  /** Standardized metadata (common fields across all agents) */
+  metadata?: NormalizedEntryMetadata;
 }
 
 /**

@@ -664,4 +664,213 @@ describe('normalizeOutput', () => {
       expect(entries[4].content).toBe("I'll add a login feature.");
     });
   });
+
+  describe('Standardized Metadata', () => {
+    it('should include sessionId and model in system message metadata', () => {
+      const state = new CursorNormalizationState();
+      const message: CursorSystemMessage = {
+        type: 'system',
+        session_id: 'sess-cursor-123',
+        model: 'claude-sonnet-4.5',
+      };
+
+      const entry = state.handleSystemMessage(message);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata).toBeDefined();
+      expect(entry!.metadata!.sessionId).toBe('sess-cursor-123');
+      expect(entry!.metadata!.model).toBe('claude-sonnet-4.5');
+    });
+
+    it('should include metadata in all message types after system message', () => {
+      const state = new CursorNormalizationState();
+
+      // System message
+      const systemMsg: CursorSystemMessage = {
+        type: 'system',
+        session_id: 'sess-meta-123',
+        model: 'gpt-4o',
+        permission_mode: 'auto',
+      };
+      const systemEntry = state.handleSystemMessage(systemMsg);
+      expect(systemEntry!.metadata?.sessionId).toBe('sess-meta-123');
+      expect(systemEntry!.metadata?.model).toBe('gpt-4o');
+      expect(systemEntry!.metadata?.permissionMode).toBe('auto');
+
+      // User message
+      const userMsg: CursorUserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Test prompt' }],
+        },
+      };
+      const userEntry = state.handleUserMessage(userMsg);
+      expect(userEntry.metadata?.sessionId).toBe('sess-meta-123');
+      expect(userEntry.metadata?.model).toBe('gpt-4o');
+
+      // Assistant message
+      const assistantMsg: CursorAssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Response' }],
+        },
+      };
+      const assistantEntry = state.handleAssistantMessage(assistantMsg);
+      expect(assistantEntry.metadata?.sessionId).toBe('sess-meta-123');
+      expect(assistantEntry.metadata?.model).toBe('gpt-4o');
+
+      // Thinking message
+      const thinkingMsg: CursorThinkingMessage = {
+        type: 'thinking',
+        text: 'Analyzing...',
+      };
+      const thinkingEntry = state.handleThinkingMessage(thinkingMsg);
+      expect(thinkingEntry!.metadata?.sessionId).toBe('sess-meta-123');
+      expect(thinkingEntry!.metadata?.model).toBe('gpt-4o');
+    });
+
+    it('should include metadata in streaming assistant messages', () => {
+      const state = new CursorNormalizationState();
+
+      // Setup session
+      const systemMsg: CursorSystemMessage = {
+        type: 'system',
+        session_id: 'sess-stream-456',
+        model: 'claude-sonnet-4.5',
+      };
+      state.handleSystemMessage(systemMsg);
+
+      // First chunk
+      const chunk1: CursorAssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hello ' }],
+        },
+      };
+      const entry1 = state.handleAssistantMessage(chunk1);
+      expect(entry1.metadata?.sessionId).toBe('sess-stream-456');
+
+      // Second chunk (coalesced)
+      const chunk2: CursorAssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'world' }],
+        },
+      };
+      const entry2 = state.handleAssistantMessage(chunk2);
+      expect(entry2.metadata?.sessionId).toBe('sess-stream-456');
+      expect(entry2.metadata?.model).toBe('claude-sonnet-4.5');
+    });
+
+    it('should include metadata in error messages', () => {
+      const state = new CursorNormalizationState();
+
+      // Setup session
+      const systemMsg: CursorSystemMessage = {
+        type: 'system',
+        session_id: 'sess-error-789',
+        model: 'gpt-4o',
+      };
+      state.handleSystemMessage(systemMsg);
+
+      // Error result
+      const resultMsg: CursorResultMessage = {
+        type: 'result',
+        is_error: true,
+        result: 'Task failed',
+      };
+      const entry = state.handleResultMessage(resultMsg);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata?.sessionId).toBe('sess-error-789');
+      expect(entry!.metadata?.model).toBe('gpt-4o');
+    });
+
+    it('should not include metadata if no system message received', () => {
+      const state = new CursorNormalizationState();
+
+      const userMsg: CursorUserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Test without system msg' }],
+        },
+      };
+
+      const entry = state.handleUserMessage(userMsg);
+
+      expect(entry).toBeDefined();
+      expect(entry.metadata).toBeUndefined();
+    });
+
+    it('should handle system message with only sessionId (no model)', () => {
+      const state = new CursorNormalizationState();
+      const message: CursorSystemMessage = {
+        type: 'system',
+        session_id: 'sess-no-model',
+      };
+
+      const entry = state.handleSystemMessage(message);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata).toBeDefined();
+      expect(entry!.metadata!.sessionId).toBe('sess-no-model');
+      expect(entry!.metadata!.model).toBeUndefined();
+    });
+
+    it('should preserve metadata across streaming workflow', async () => {
+      const systemMsg: CursorSystemMessage = {
+        type: 'system',
+        session_id: 'sess-workflow-999',
+        model: 'claude-sonnet-4.5',
+      };
+
+      const userMsg: CursorUserMessage = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Test prompt' }],
+        },
+      };
+
+      const assistantMsg1: CursorAssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Response ' }],
+        },
+      };
+
+      const assistantMsg2: CursorAssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'part 2' }],
+        },
+      };
+
+      const stream = await createOutputStream([
+        { type: 'stdout', data: JSON.stringify(systemMsg) + '\n' },
+        { type: 'stdout', data: JSON.stringify(userMsg) + '\n' },
+        { type: 'stdout', data: JSON.stringify(assistantMsg1) + '\n' },
+        { type: 'stdout', data: JSON.stringify(assistantMsg2) + '\n' },
+      ]);
+
+      const entries = [];
+      for await (const entry of normalizeOutput(stream, '/tmp')) {
+        entries.push(entry);
+      }
+
+      // All entries should have metadata
+      expect(entries.length).toBeGreaterThanOrEqual(3);
+      entries.forEach((entry, index) => {
+        expect(entry.metadata?.sessionId).toBe('sess-workflow-999');
+        expect(entry.metadata?.model).toBe('claude-sonnet-4.5');
+      });
+    });
+  });
 });

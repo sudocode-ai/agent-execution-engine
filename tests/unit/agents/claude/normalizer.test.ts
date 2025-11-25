@@ -462,4 +462,179 @@ describe('ClaudeOutputNormalizer - Core Functionality', () => {
       expect(entry).toBeNull();
     });
   });
+
+  describe('Standardized Metadata', () => {
+    it('should include sessionId and model in system message metadata', () => {
+      const state = createNormalizerState();
+      const message: SystemMessage = {
+        type: 'system',
+        sessionId: 'sess-abc-123',
+        model: 'claude-sonnet-4',
+      };
+
+      const entry = normalizeMessage(message, workDir, state);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata).toBeDefined();
+      expect(entry!.metadata!.sessionId).toBe('sess-abc-123');
+      expect(entry!.metadata!.model).toBe('claude-sonnet-4');
+    });
+
+    it('should include metadata in all message types after system message', () => {
+      const state = createNormalizerState();
+
+      // First, process system message to capture session ID
+      const systemMsg: SystemMessage = {
+        type: 'system',
+        sessionId: 'sess-xyz-789',
+        model: 'claude-sonnet-4',
+      };
+      normalizeMessage(systemMsg, workDir, state);
+
+      // User message should have metadata
+      const userMsg: UserMessage = {
+        type: 'user',
+        message: { role: 'user', content: 'Test prompt' },
+      };
+      const userEntry = normalizeMessage(userMsg, workDir, state);
+      expect(userEntry!.metadata?.sessionId).toBe('sess-xyz-789');
+      expect(userEntry!.metadata?.model).toBe('claude-sonnet-4');
+
+      // Assistant message should have metadata
+      const assistantMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Response' }],
+        },
+      };
+      const assistantEntry = normalizeMessage(assistantMsg, workDir, state);
+      expect(assistantEntry!.metadata?.sessionId).toBe('sess-xyz-789');
+      expect(assistantEntry!.metadata?.model).toBe('claude-sonnet-4');
+
+      // Tool use should have metadata
+      const toolMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-1',
+              name: 'Bash',
+              input: { command: 'ls' },
+            },
+          ],
+        },
+      };
+      const toolEntry = normalizeMessage(toolMsg, workDir, state);
+      expect(toolEntry!.metadata?.sessionId).toBe('sess-xyz-789');
+      expect(toolEntry!.metadata?.model).toBe('claude-sonnet-4');
+    });
+
+    it('should include metadata in streaming assistant messages', () => {
+      const state = createNormalizerState();
+
+      // Setup session
+      const systemMsg: SystemMessage = {
+        type: 'system',
+        sessionId: 'sess-stream-123',
+        model: 'claude-sonnet-4',
+      };
+      normalizeMessage(systemMsg, workDir, state);
+
+      // First chunk
+      const chunk1: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hello ' }],
+        },
+      };
+      const entry1 = normalizeMessage(chunk1, workDir, state);
+      expect(entry1!.metadata?.sessionId).toBe('sess-stream-123');
+
+      // Second chunk (coalesced)
+      const chunk2: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'world' }],
+        },
+      };
+      const entry2 = normalizeMessage(chunk2, workDir, state);
+      expect(entry2!.metadata?.sessionId).toBe('sess-stream-123');
+    });
+
+    it('should include metadata in tool completion messages', () => {
+      const state = createNormalizerState();
+
+      // Setup session
+      const systemMsg: SystemMessage = {
+        type: 'system',
+        sessionId: 'sess-tool-123',
+        model: 'claude-sonnet-4',
+      };
+      normalizeMessage(systemMsg, workDir, state);
+
+      // Tool use started
+      const toolUseMsg: AssistantMessage = {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool-456',
+              name: 'Bash',
+              input: { command: 'echo hello' },
+            },
+          ],
+        },
+      };
+      const startEntry = normalizeMessage(toolUseMsg, workDir, state);
+      expect(startEntry!.metadata?.sessionId).toBe('sess-tool-123');
+
+      // Tool completed
+      const completionMsg: ToolUseMessage = {
+        type: 'tool_use',
+        subtype: 'completed',
+        toolUseId: 'tool-456',
+        toolName: 'Bash',
+        toolResult: { stdout: 'hello\n', exitCode: 0 },
+      };
+      const completedEntry = normalizeMessage(completionMsg, workDir, state);
+      expect(completedEntry!.metadata?.sessionId).toBe('sess-tool-123');
+      expect(completedEntry!.metadata?.model).toBe('claude-sonnet-4');
+    });
+
+    it('should not include metadata if no system message received', () => {
+      const state = createNormalizerState();
+
+      const userMsg: UserMessage = {
+        type: 'user',
+        message: { role: 'user', content: 'Test without system msg' },
+      };
+
+      const entry = normalizeMessage(userMsg, workDir, state);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata).toBeUndefined();
+    });
+
+    it('should handle system message with only sessionId (no model)', () => {
+      const state = createNormalizerState();
+      const message: SystemMessage = {
+        type: 'system',
+        sessionId: 'sess-no-model',
+      };
+
+      const entry = normalizeMessage(message, workDir, state);
+
+      expect(entry).toBeDefined();
+      expect(entry!.metadata).toBeDefined();
+      expect(entry!.metadata!.sessionId).toBe('sess-no-model');
+      expect(entry!.metadata!.model).toBeUndefined();
+    });
+  });
 });
