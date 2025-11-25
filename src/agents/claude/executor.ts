@@ -155,7 +155,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
   /**
    * Resume a previous Claude Code session
    *
-   * Spawns Claude with --resume-session flag and sends new prompt.
+   * Spawns Claude with --resume flag and sends new prompt.
    *
    * @param task - Task to execute
    * @param sessionId - Previous session ID
@@ -346,7 +346,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
 
     // Resume session
     if (resume && sessionId) {
-      args.push('--resume-session', sessionId);
+      args.push('--resume', sessionId);
     }
 
     return args;

@@ -583,6 +583,51 @@ describe.skipIf(SKIP_E2E)('E2E: ClaudeCodeExecutor with Real CLI', () => {
         // Verify resume flag was used
         expect(result2.process).toBeDefined();
 
+        // Verify the resumed session has the same session ID
+        const chunks2: Buffer[] = [];
+        result2.process.streams!.stdout.on('data', (chunk: Buffer) => {
+          chunks2.push(chunk);
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        const output2 = Buffer.concat(chunks2).toString();
+        const lines2 = output2.split('\n').filter((line) => line.trim());
+
+        // Verify session ID is preserved
+        let resumedSessionId: string | undefined;
+        for (const line of lines2) {
+          try {
+            const msg = JSON.parse(line);
+            if (msg.type === 'system' && msg.sessionId) {
+              resumedSessionId = msg.sessionId;
+              break;
+            }
+          } catch {
+            // Skip non-JSON lines
+          }
+        }
+
+        // Session ID should be the same
+        expect(resumedSessionId).toBe(sessionId);
+
+        // Verify Claude remembers the context (the response should mention "42")
+        const hasAnswer = lines2.some((line) => {
+          try {
+            const msg = JSON.parse(line);
+            return (
+              msg.type === 'assistant' &&
+              msg.message?.content?.some((block: any) =>
+                block.type === 'text' && block.text?.includes('42')
+              )
+            );
+          } catch {
+            return false;
+          }
+        });
+
+        expect(hasAnswer).toBe(true);
+
         // Clean up
         result2.process.process.kill('SIGTERM');
         await new Promise((resolve) => setTimeout(resolve, 1000));

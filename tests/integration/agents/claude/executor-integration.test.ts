@@ -257,7 +257,7 @@ describe('ClaudeCodeExecutor Integration', () => {
       // Verify spawn was called with resume flag
       expect(mockSpawn).toHaveBeenCalled();
       const [, args] = mockSpawn.mock.calls[0];
-      expect(args).toContain('--resume-session');
+      expect(args).toContain('--resume');
       expect(args).toContain('sess-abc123');
 
       expect(result.process).toBeDefined();

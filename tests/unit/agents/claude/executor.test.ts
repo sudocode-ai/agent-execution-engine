@@ -217,7 +217,7 @@ describe('ClaudeCodeExecutor', () => {
       await executor.resumeTask(task, 'sess-abc123');
 
       const [, args] = mockSpawn.mock.calls[0];
-      expect(args).toContain('--resume-session');
+      expect(args).toContain('--resume');
       expect(args).toContain('sess-abc123');
     });
   });
