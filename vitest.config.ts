@@ -7,7 +7,7 @@ export default defineConfig({
     watch: false,
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    testTimeout: 30000, // Increase timeout for process spawning tests
+    testTimeout: 60000, // Increase timeout for process spawning tests
     retry: 3, // Retry failed tests up to 3 times for flakes.
   },
   resolve: {
