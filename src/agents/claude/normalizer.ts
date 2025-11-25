@@ -165,10 +165,14 @@ function createUserMessage(
 
       if (toolInfo) {
         // Extract result content
-        const resultContent = toolResult.content
-          .filter((block): block is TextBlock => block.type === "text")
-          .map((block) => block.text)
-          .join("");
+        // Handle both string content and array of TextBlock objects
+        const resultContent =
+          typeof toolResult.content === "string"
+            ? toolResult.content
+            : toolResult.content
+                .filter((block): block is TextBlock => block.type === "text")
+                .map((block) => block.text)
+                .join("");
 
         // Parse the result to determine success/failure
         const { status, result } = parseToolResultContent(

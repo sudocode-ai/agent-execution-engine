@@ -544,4 +544,120 @@ describe.skipIf(SKIP_E2E)('E2E: CursorExecutor with Real CLI', () => {
     const kinds = entries.map((e) => e.type.kind);
     expect(kinds.length).toBeGreaterThan(0);
   }, 30000);
+
+  it('should support session resumption', async () => {
+    const executor = new CursorExecutor({
+      force: true,
+      model: 'auto',
+    });
+
+    // First session: Ask a question
+    const task1: ExecutionTask = {
+      id: 'e2e-resume-test-1',
+      type: 'custom',
+      prompt: 'What is 6 times 7? Just give me the number.',
+      workDir: tempDir,
+      config: {},
+    };
+
+    const result1 = await executor.executeTask(task1);
+    const outputStream1 = createOutputStream(result1.process);
+
+    let sessionId: string | undefined;
+    const entries1 = [];
+
+    const timeout1 = setTimeout(() => {
+      if (result1.process.status === 'busy') {
+        result1.process.process.kill('SIGTERM');
+      }
+    }, 20000);
+
+    try {
+      for await (const entry of executor.normalizeOutput(
+        outputStream1,
+        tempDir
+      )) {
+        entries1.push(entry);
+
+        // Capture session ID from system message
+        if (entry.type.kind === 'system_message' && entry.metadata?.sessionId) {
+          sessionId = entry.metadata.sessionId;
+        }
+
+        // Stop after collecting enough entries
+        if (entries1.length >= 20 || (sessionId && entries1.length >= 5)) {
+          break;
+        }
+      }
+    } finally {
+      clearTimeout(timeout1);
+      if (result1.process.status === 'busy') {
+        result1.process.process.kill('SIGTERM');
+      }
+    }
+
+    // Verify we got a session ID
+    expect(sessionId).toBeDefined();
+    expect(sessionId).toBeTruthy();
+
+    // Wait a bit before resuming
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Second session: Resume and ask a follow-up
+    const task2: ExecutionTask = {
+      id: 'e2e-resume-test-2',
+      type: 'custom',
+      prompt: 'What was the answer I asked you about earlier?',
+      workDir: tempDir,
+      config: {},
+    };
+
+    const result2 = await executor.resumeTask(task2, sessionId!);
+    const outputStream2 = createOutputStream(result2.process);
+
+    let resumedSessionId: string | undefined;
+    let foundAnswer = false;
+    const entries2 = [];
+
+    const timeout2 = setTimeout(() => {
+      if (result2.process.status === 'busy') {
+        result2.process.process.kill('SIGTERM');
+      }
+    }, 20000);
+
+    try {
+      for await (const entry of executor.normalizeOutput(
+        outputStream2,
+        tempDir
+      )) {
+        entries2.push(entry);
+
+        // Verify session ID is preserved
+        if (entry.type.kind === 'system_message' && entry.metadata?.sessionId) {
+          resumedSessionId = entry.metadata.sessionId;
+        }
+
+        // Check if Cursor remembers the answer (42)
+        if (entry.content.includes('42')) {
+          foundAnswer = true;
+        }
+
+        // Stop after collecting enough entries
+        if (entries2.length >= 25 || foundAnswer) {
+          break;
+        }
+      }
+    } finally {
+      clearTimeout(timeout2);
+      if (result2.process.status === 'busy') {
+        result2.process.process.kill('SIGTERM');
+      }
+    }
+
+    // Verify session ID is the same
+    expect(resumedSessionId).toBe(sessionId);
+
+    // Verify Cursor remembered the context
+    expect(foundAnswer).toBe(true);
+  }, 50000);
 });

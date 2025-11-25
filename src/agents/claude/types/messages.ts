@@ -49,7 +49,7 @@ export interface ToolUseBlock {
 export interface ToolResultBlock {
   type: "tool_result";
   tool_use_id: string; // Links back to the original tool_use block
-  content: Array<TextBlock>; // Result content (usually text)
+  content: string | Array<TextBlock>; // Result content (can be string or array of text blocks)
   is_error?: boolean; // Whether the tool execution failed
 }
 
