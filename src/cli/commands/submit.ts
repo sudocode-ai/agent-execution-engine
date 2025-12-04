@@ -60,11 +60,20 @@ function createExecutor(agent: string, workDir: string, options: SubmitOptions):
   // Use factory to create executor based on agent name
   switch (agent) {
     case 'claude':
+      // Note: dangerouslySkipPermissions skips ALL hooks including directory guard
+      // So when restrictToWorkdir is enabled, we cannot use dangerouslySkipPermissions
+      const skipPermissions = options.restrictToWorkdir
+        ? false // Cannot skip permissions when using directory guard hook
+        : (options.force ?? true); // MVP: auto-approve by default
+
       return createAgentExecutor('claude', {
         workDir,
         print: true,
         outputFormat: 'stream-json',
-        dangerouslySkipPermissions: options.force ?? true, // MVP: auto-approve by default
+        dangerouslySkipPermissions: skipPermissions,
+        // Map from CLI option names to config names
+        restrictToWorkDir: options.restrictToWorkdir,
+        directoryGuardHookPath: options.directoryGuardHookPath,
         // Note: Claude Code doesn't support model selection via CLI
       });
 
@@ -483,6 +492,8 @@ export function registerSubmitCommand(program: any): void {
     .option('--model <model>', 'Model to use (e.g., claude-3-opus, cursor-small)')
     .option('--force', 'Auto-approve all tool executions (default: true)', true)
     .option('--mcp-servers <servers>', 'Comma-separated list of MCP servers to enable')
+    .option('--restrict-to-workdir', 'Restrict file operations to working directory (Claude only)', false)
+    .option('--directory-guard-hook-path <path>', 'Custom path to directory guard hook script (Claude only)')
     .action(async (options: SubmitOptions) => {
       try {
         const result = await submitCommand(options);

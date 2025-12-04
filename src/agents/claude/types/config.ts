@@ -94,4 +94,25 @@ export interface ClaudeCodeConfig {
    * @default false
    */
   dangerouslySkipPermissions?: boolean;
+
+  /**
+   * Restrict file operations to the working directory
+   *
+   * When enabled, a PreToolUse hook is configured to block Read, Write, Edit,
+   * Glob, and Grep operations that target files outside the working directory.
+   *
+   * This provides security isolation when running agents in worktrees or
+   * sandboxed environments.
+   *
+   * @default false
+   */
+  restrictToWorkDir?: boolean;
+
+  /**
+   * Path to the directory guard hook script
+   *
+   * Only used when restrictToWorkDir is enabled. If not specified,
+   * the executor will use the bundled hook script.
+   */
+  directoryGuardHookPath?: string;
 }

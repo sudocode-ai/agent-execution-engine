@@ -8,6 +8,8 @@
 
 import { spawn } from 'child_process';
 import { Readable } from 'stream';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { BaseAgentExecutor } from '../base/base-executor.js';
 import { ProtocolPeer } from './protocol/protocol-peer.js';
 import { ClaudeAgentClient } from './protocol/client.js';
@@ -26,6 +28,10 @@ import type {
 } from '../types/agent-executor.js';
 import type { ExecutionTask } from '../../engine/types.js';
 import type { ManagedProcess } from '../../process/types.js';
+
+// Get directory of this module for finding hook scripts
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Extended ManagedProcess with Claude-specific peer property
@@ -87,8 +93,13 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    * @returns Spawned process with protocol peer
    */
   async executeTask(task: ExecutionTask): Promise<SpawnedChild> {
-    const args = this.buildArgs(false);
+    const args = this.buildArgs(false, undefined, task.workDir);
     const hooks = this.buildHooks();
+
+    // Debug: log the arguments being passed to Claude
+    if (process.env.DEBUG_CLAUDE_ARGS) {
+      console.error('[DEBUG] Claude args:', JSON.stringify(args, null, 2));
+    }
 
     // Spawn claude process
     const childProcess = spawn(
@@ -165,7 +176,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     task: ExecutionTask,
     sessionId: string
   ): Promise<SpawnedChild> {
-    const args = this.buildArgs(true, sessionId);
+    const args = this.buildArgs(true, sessionId, task.workDir);
     const hooks = this.buildHooks();
 
     // Spawn claude process with resume flag
@@ -312,9 +323,10 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    *
    * @param resume - Whether this is a resume operation
    * @param sessionId - Session ID for resume
+   * @param workDir - Working directory for directory restriction
    * @returns Array of CLI arguments
    */
-  private buildArgs(resume: boolean, sessionId?: string): string[] {
+  private buildArgs(resume: boolean, sessionId?: string, workDir?: string): string[] {
     const args: string[] = [];
 
     // Print mode (required for stream-json)
@@ -344,12 +356,67 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
       args.push('--dangerously-skip-permissions');
     }
 
+    // Directory restriction via PreToolUse hook
+    if (this.config.restrictToWorkDir && workDir) {
+      const settings = this.buildDirectoryGuardSettings(workDir);
+      args.push('--settings', JSON.stringify(settings));
+    }
+
     // Resume session
     if (resume && sessionId) {
       args.push('--resume', sessionId);
     }
 
     return args;
+  }
+
+  /**
+   * Build settings JSON with directory guard hook
+   *
+   * Creates a settings object that configures a PreToolUse hook to restrict
+   * file operations to the specified working directory.
+   *
+   * @param workDir - Working directory to restrict to
+   * @returns Settings object for --settings flag
+   */
+  private buildDirectoryGuardSettings(workDir: string): Record<string, unknown> {
+    // Get path to the directory guard hook script
+    const hookPath = this.config.directoryGuardHookPath ||
+      path.join(__dirname, 'hooks', 'directory-guard.js');
+
+    // Build the hook command with CLAUDE_WORKDIR environment variable
+    // Wrap in sh -c to ensure environment variable is set correctly
+    // (Claude Code may run hooks without shell interpretation)
+    const isTypeScript = hookPath.endsWith('.ts');
+
+    // Escape special characters for shell safety
+    const escapeForShell = (str: string) =>
+      str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    const escapedWorkDir = escapeForShell(workDir);
+    const escapedHookPath = escapeForShell(hookPath);
+
+    const innerCommand = isTypeScript
+      ? `npx tsx "${escapedHookPath}"`
+      : `node "${escapedHookPath}"`;
+
+    const hookCommand = `sh -c "CLAUDE_WORKDIR=\\"${escapedWorkDir}\\" ${innerCommand}"`;
+
+    return {
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Read|Edit|Write|MultiEdit|Glob|Grep',
+            hooks: [
+              {
+                type: 'command',
+                command: hookCommand,
+              },
+            ],
+          },
+        ],
+      },
+    };
   }
 
   /**

@@ -197,6 +197,138 @@ describe('ClaudeCodeExecutor', () => {
       const formatIndex = args.indexOf('--output-format');
       expect(args[formatIndex + 1]).toBe('json');
     });
+
+    it('should add --settings with directory guard hook when restrictToWorkDir is enabled', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        restrictToWorkDir: true,
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/project/workspace',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      expect(args).toContain('--settings');
+
+      // Find the settings JSON
+      const settingsIndex = args.indexOf('--settings');
+      const settingsJson = args[settingsIndex + 1];
+      const settings = JSON.parse(settingsJson);
+
+      // Verify hook configuration
+      expect(settings.hooks).toBeDefined();
+      expect(settings.hooks.PreToolUse).toBeDefined();
+      expect(settings.hooks.PreToolUse).toHaveLength(1);
+      expect(settings.hooks.PreToolUse[0].matcher).toBe('Read|Edit|Write|MultiEdit|Glob|Grep');
+      expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('CLAUDE_WORKDIR=');
+    });
+
+    it('should not add --settings when restrictToWorkDir is disabled', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        restrictToWorkDir: false,
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      expect(args).not.toContain('--settings');
+    });
+
+    it('should use custom hook path when directoryGuardHookPath is specified', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        restrictToWorkDir: true,
+        directoryGuardHookPath: '/custom/path/to/hook.js',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/project/workspace',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      const settingsIndex = args.indexOf('--settings');
+      const settingsJson = args[settingsIndex + 1];
+      const settings = JSON.parse(settingsJson);
+
+      expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('/custom/path/to/hook.js');
+    });
+
+    it('should use npx tsx for TypeScript hook paths', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        restrictToWorkDir: true,
+        directoryGuardHookPath: '/path/to/hook.ts',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/project/workspace',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      const settingsIndex = args.indexOf('--settings');
+      const settingsJson = args[settingsIndex + 1];
+      const settings = JSON.parse(settingsJson);
+
+      expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain('npx tsx');
+    });
+
+    it('should use node for JavaScript hook paths', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        restrictToWorkDir: true,
+        directoryGuardHookPath: '/path/to/hook.js',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/project/workspace',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      const settingsIndex = args.indexOf('--settings');
+      const settingsJson = args[settingsIndex + 1];
+      const settings = JSON.parse(settingsJson);
+
+      expect(settings.hooks.PreToolUse[0].hooks[0].command).toMatch(/CLAUDE_WORKDIR=.*node /);
+    });
   });
 
   describe('Resume Session', () => {

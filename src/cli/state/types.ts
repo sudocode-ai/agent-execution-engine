@@ -70,6 +70,12 @@ export interface SubmitOptions {
 
   /** MCP servers to enable (comma-separated list) */
   mcpServers?: string;
+
+  /** Restrict file operations to working directory (Claude only) */
+  restrictToWorkdir?: boolean;
+
+  /** Custom path to directory guard hook script (Claude only) */
+  directoryGuardHookPath?: string;
 }
 
 /**

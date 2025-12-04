@@ -61,3 +61,6 @@ export {
 
 // Normalizer
 export { normalizeMessage, createNormalizerState } from "./normalizer.js";
+
+// Hooks
+export { getDirectoryGuardHookPath } from "./hooks/index.js";
