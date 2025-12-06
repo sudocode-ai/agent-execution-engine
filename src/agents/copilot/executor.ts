@@ -253,6 +253,7 @@ export class CopilotExecutor extends BaseAgentExecutor {
       supportsApprovals: false, // Copilot has built-in prompts
       supportsMcp: true,
       protocol: 'custom', // Plain text protocol
+      supportsMidExecutionMessages: false, // Not supported yet
     };
   }
 

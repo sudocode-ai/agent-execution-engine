@@ -369,6 +369,128 @@ describe('ClaudeCodeExecutor', () => {
       expect(capabilities.supportsApprovals).toBe(true);
       expect(capabilities.supportsMcp).toBe(true);
       expect(capabilities.protocol).toBe('stream-json');
+      expect(capabilities.supportsMidExecutionMessages).toBe(true);
+    });
+  });
+
+  describe('Mid-Execution Messaging', () => {
+    it('should send message via peer when sendMessage is called', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      const result = await executor.executeTask(task);
+
+      // Send a mid-execution message
+      await executor.sendMessage(result.process, 'Additional instruction');
+
+      // Verify stdin.write was called with user message JSON
+      const writeCall = (mockChildProcess.stdin!.write as ReturnType<typeof vi.fn>).mock.calls;
+      // Find the call that contains the additional instruction
+      const hasAdditionalMessage = writeCall.some((call: unknown[]) =>
+        String(call[0]).includes('Additional instruction')
+      );
+      expect(hasAdditionalMessage).toBe(true);
+    });
+
+    it('should throw error when sendMessage is called without peer', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      // Create a mock process without peer
+      const processWithoutPeer = {
+        id: 'test-process',
+        pid: 12345,
+        status: 'busy' as const,
+        spawnedAt: new Date(),
+        lastActivity: new Date(),
+        exitCode: null,
+        signal: null,
+        process: mockChildProcess,
+        streams: {
+          stdin: mockChildProcess.stdin!,
+          stdout: mockChildProcess.stdout!,
+          stderr: mockChildProcess.stderr!,
+        },
+        metrics: { totalDuration: 0, tasksCompleted: 0, successRate: 0 },
+        // No peer attached!
+      };
+
+      await expect(
+        executor.sendMessage(processWithoutPeer, 'test')
+      ).rejects.toThrow('Process does not have protocol peer attached');
+    });
+
+    it('should send interrupt via peer when interrupt is called', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      const result = await executor.executeTask(task);
+
+      // Send interrupt
+      await executor.interrupt(result.process);
+
+      // Verify stdin.write was called with interrupt control message
+      const writeCall = (mockChildProcess.stdin!.write as ReturnType<typeof vi.fn>).mock.calls;
+      const hasInterrupt = writeCall.some((call: unknown[]) =>
+        String(call[0]).includes('"type":"control"') &&
+        String(call[0]).includes('"interrupt"')
+      );
+      expect(hasInterrupt).toBe(true);
+    });
+
+    it('should fallback to SIGINT when interrupt is called without peer', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      // Create a mock process without peer but with process handle
+      const processWithoutPeer = {
+        id: 'test-process',
+        pid: 12345,
+        status: 'busy' as const,
+        spawnedAt: new Date(),
+        lastActivity: new Date(),
+        exitCode: null,
+        signal: null,
+        process: mockChildProcess,
+        streams: {
+          stdin: mockChildProcess.stdin!,
+          stdout: mockChildProcess.stdout!,
+          stderr: mockChildProcess.stderr!,
+        },
+        metrics: { totalDuration: 0, tasksCompleted: 0, successRate: 0 },
+        // No peer attached!
+      };
+
+      await executor.interrupt(processWithoutPeer);
+
+      // Verify kill was called with SIGINT
+      expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGINT');
     });
   });
 

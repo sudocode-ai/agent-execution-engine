@@ -250,6 +250,28 @@ export class ProtocolPeer {
   }
 
   /**
+   * Send interrupt signal to Claude CLI
+   *
+   * Sends a control message requesting Claude to stop the current operation.
+   * The interrupt is "graceful" - Claude decides how to handle it, typically
+   * finishing the current tool operation before stopping.
+   *
+   * @example
+   * ```typescript
+   * // User wants to cancel the current task
+   * await peer.sendInterrupt();
+   * ```
+   */
+  async sendInterrupt(): Promise<void> {
+    const message = {
+      type: 'control',
+      control: { type: 'interrupt' },
+    };
+
+    await this.writeMessage(message);
+  }
+
+  /**
    * Send a control response to Claude CLI
    *
    * Internal method used by the read loop to send responses.

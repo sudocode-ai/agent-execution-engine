@@ -1,7 +1,47 @@
 /**
  * Claude Code Agent Module
  *
- * Complete integration for Claude Code CLI.
+ * Complete integration for Claude Code with two executor implementations:
+ *
+ * ## Executors
+ *
+ * ### ClaudeCodeExecutor (CLI-based, recommended)
+ * Uses the `claude` CLI via process spawning with bidirectional stream-json protocol.
+ * Provides full feature parity with Claude Code CLI including custom hooks and
+ * directory restrictions.
+ *
+ * ```typescript
+ * const executor = new ClaudeCodeExecutor({
+ *   workDir: '/path/to/project',
+ *   print: true,
+ *   outputFormat: 'stream-json',
+ * });
+ * ```
+ *
+ * ### ClaudeSDKExecutor (SDK-based)
+ * Uses `@anthropic-ai/claude-agent-sdk` for a simpler, dependency-based approach.
+ * Provides native streaming input via AsyncIterable and cleaner interrupt handling.
+ *
+ * ```typescript
+ * const executor = new ClaudeSDKExecutor({
+ *   workDir: '/path/to/project',
+ *   model: 'claude-opus-4-5-20251101',
+ * });
+ * ```
+ *
+ * ## Feature Comparison
+ *
+ * | Feature | CLI Executor | SDK Executor |
+ * |---------|--------------|--------------|
+ * | Mid-execution messages | ✅ | ✅ |
+ * | Session resume | ✅ | ✅ |
+ * | Tool approvals | ✅ | ✅ |
+ * | MCP servers | ✅ | ✅ |
+ * | Custom hooks | ✅ | ❌ |
+ * | Directory restriction | ✅ | ❌ |
+ * | No external process | ❌ | ✅ |
+ *
+ * See `docs/sdk-research.md` for detailed comparison.
  *
  * @module agents/claude
  */
@@ -14,8 +54,12 @@ export type {
 } from "./config-builder.js";
 export * from "./adapter.js";
 
-// Executor
+// Executors
 export { ClaudeCodeExecutor } from "./executor.js";
+export { ClaudeSDKExecutor, type ClaudeSDKConfig } from "./sdk-executor.js";
+
+// Session wrapper
+export { ClaudeSession, type SessionState } from "./session.js";
 
 // Types
 export type {
@@ -45,6 +89,7 @@ export type {
   PermissionMode,
   PermissionUpdate,
   SdkControlRequest,
+  ControlMessage,
 } from "./types/index.js";
 
 // Protocol
@@ -64,3 +109,6 @@ export { normalizeMessage, createNormalizerState } from "./normalizer.js";
 
 // Hooks
 export { getDirectoryGuardHookPath } from "./hooks/index.js";
+
+// Utils
+export { AsyncQueue } from "./utils/index.js";

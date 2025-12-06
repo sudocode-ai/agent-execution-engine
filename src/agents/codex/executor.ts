@@ -363,6 +363,7 @@ export class CodexExecutor extends BaseAgentExecutor {
       supportsApprovals: true, // Supports --dangerously-bypass-approvals-and-sandbox
       supportsMcp: true, // Codex has MCP support
       protocol: "jsonl", // Line-delimited JSON output
+      supportsMidExecutionMessages: false, // Not supported yet
     };
   }
 

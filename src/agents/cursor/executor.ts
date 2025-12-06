@@ -304,6 +304,7 @@ export class CursorExecutor extends BaseAgentExecutor {
       supportsApprovals: false, // Uses --force flag, no interactive approvals
       supportsMcp: true, // Supports MCP server integration
       protocol: "jsonl", // Line-delimited JSON output
+      supportsMidExecutionMessages: false, // Not supported yet
     };
   }
 
