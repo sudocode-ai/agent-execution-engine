@@ -132,6 +132,7 @@ describe('CursorExecutor Integration', () => {
         supportsApprovals: false,
         supportsMcp: true,
         protocol: 'jsonl',
+        supportsMidExecutionMessages: false,
       });
     });
   });

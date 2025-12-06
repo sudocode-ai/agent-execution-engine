@@ -518,6 +518,7 @@ describe('CursorExecutor', () => {
         supportsApprovals: false,
         supportsMcp: true,
         protocol: 'jsonl',
+        supportsMidExecutionMessages: false,
       });
     });
   });

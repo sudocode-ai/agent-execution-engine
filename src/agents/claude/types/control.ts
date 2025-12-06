@@ -199,3 +199,25 @@ export interface SdkControlRequest {
     mode?: PermissionMode;
   };
 }
+
+/**
+ * Control message for interrupting execution
+ *
+ * Sent to Claude CLI to request stopping the current operation.
+ * Claude handles the interrupt gracefully - it may finish the current
+ * tool operation before stopping.
+ *
+ * @example
+ * ```json
+ * {
+ *   "type": "control",
+ *   "control": { "type": "interrupt" }
+ * }
+ * ```
+ */
+export interface ControlMessage {
+  type: 'control';
+  control: {
+    type: 'interrupt';
+  };
+}

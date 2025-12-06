@@ -334,6 +334,15 @@ describe('ProtocolPeer', () => {
       expect(msg.request.type).toBe('set_permission_mode');
       expect(msg.request.mode).toBe('bypass_permissions');
     });
+
+    it('should send interrupt control message', async () => {
+      await peer.sendInterrupt();
+
+      expect(stdinWrites).toHaveLength(1);
+      const msg = JSON.parse(stdinWrites[0]);
+      expect(msg.type).toBe('control');
+      expect(msg.control).toEqual({ type: 'interrupt' });
+    });
   });
 
   describe('Lifecycle', () => {

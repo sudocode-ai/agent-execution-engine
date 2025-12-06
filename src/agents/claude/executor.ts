@@ -302,7 +302,66 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
       supportsApprovals: true,
       supportsMcp: true,
       protocol: 'stream-json',
+      supportsMidExecutionMessages: true,
     };
+  }
+
+  /**
+   * Send an additional message to a running Claude process
+   *
+   * Allows sending mid-execution guidance while Claude is actively working on a task.
+   * The message is sent via the protocol peer's bidirectional stream-json protocol.
+   *
+   * @param process - The managed process from executeTask() or resumeTask()
+   * @param message - Message content to send
+   * @throws Error if process doesn't have a protocol peer attached
+   *
+   * @example
+   * ```typescript
+   * const spawned = await executor.executeTask(task);
+   *
+   * // Later, while task is running:
+   * await executor.sendMessage(spawned.process, 'Also add unit tests');
+   * ```
+   */
+  async sendMessage(process: ManagedProcess, message: string): Promise<void> {
+    const claudeProcess = process as ClaudeManagedProcess;
+    if (!claudeProcess.peer) {
+      throw new Error('Process does not have protocol peer attached');
+    }
+
+    await claudeProcess.peer.sendUserMessage(message);
+  }
+
+  /**
+   * Interrupt a running Claude process
+   *
+   * Sends an interrupt signal to stop the current operation. Claude handles
+   * the interrupt gracefully - it may finish the current tool operation
+   * before stopping.
+   *
+   * Falls back to SIGINT if no protocol peer is attached.
+   *
+   * @param process - The managed process to interrupt
+   *
+   * @example
+   * ```typescript
+   * const spawned = await executor.executeTask(task);
+   *
+   * // User wants to cancel:
+   * await executor.interrupt(spawned.process);
+   * ```
+   */
+  async interrupt(process: ManagedProcess): Promise<void> {
+    const claudeProcess = process as ClaudeManagedProcess;
+
+    if (claudeProcess.peer) {
+      // Use protocol peer for graceful interrupt
+      await claudeProcess.peer.sendInterrupt();
+    } else if (claudeProcess.process) {
+      // Fallback to SIGINT if no peer
+      claudeProcess.process.kill('SIGINT');
+    }
   }
 
   /**

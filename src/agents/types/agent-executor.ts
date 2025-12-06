@@ -57,6 +57,15 @@ export interface AgentCapabilities {
    * Communication protocol used by this agent
    */
   protocol: ProtocolType;
+
+  /**
+   * Whether the agent supports sending messages mid-execution
+   *
+   * When true, the agent can receive additional user messages while
+   * actively processing a task. This enables mid-execution guidance
+   * where users can provide context or instructions during execution.
+   */
+  supportsMidExecutionMessages: boolean;
 }
 
 /**
@@ -465,6 +474,53 @@ export interface IAgentExecutor {
    * ```
    */
   setApprovalService?(service: IApprovalService): void;
+
+  /**
+   * Send an additional message to a running task (optional)
+   *
+   * Allows sending mid-execution guidance to the agent while it's actively
+   * processing a task. Not all agents support this - check capabilities first.
+   *
+   * @param process - The managed process from executeTask() or resumeTask()
+   * @param message - Message content to send to the agent
+   * @returns Promise that resolves when message is sent
+   * @throws Error if agent doesn't support mid-execution messaging or process is invalid
+   *
+   * @example
+   * ```typescript
+   * const executor = registry.getExecutor({ executor: 'claude-code' });
+   *
+   * if (executor.getCapabilities().supportsMidExecutionMessages) {
+   *   const spawned = await executor.executeTask(task);
+   *
+   *   // Later, while task is running:
+   *   await executor.sendMessage?.(spawned.process, 'Also add unit tests');
+   * }
+   * ```
+   */
+  sendMessage?(process: ManagedProcess, message: string): Promise<void>;
+
+  /**
+   * Interrupt a running task (optional)
+   *
+   * Sends an interrupt signal to stop the current operation. The exact behavior
+   * depends on the agent implementation - it may be a graceful stop (finish current
+   * tool) or an immediate abort.
+   *
+   * @param process - The managed process to interrupt
+   * @returns Promise that resolves when interrupt is processed
+   * @throws Error if process is invalid or not running
+   *
+   * @example
+   * ```typescript
+   * const executor = registry.getExecutor({ executor: 'claude-code' });
+   * const spawned = await executor.executeTask(task);
+   *
+   * // User wants to cancel:
+   * await executor.interrupt?.(spawned.process);
+   * ```
+   */
+  interrupt?(process: ManagedProcess): Promise<void>;
 }
 
 /**

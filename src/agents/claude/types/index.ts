@@ -39,6 +39,7 @@ export type {
   ControlResponse,
   HookConfig,
   SdkControlRequest,
+  ControlMessage,
 } from './control.js';
 
 // Configuration types
