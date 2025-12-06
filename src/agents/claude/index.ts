@@ -58,6 +58,16 @@ export * from "./adapter.js";
 export { ClaudeCodeExecutor } from "./executor.js";
 export { ClaudeSDKExecutor, type ClaudeSDKConfig } from "./sdk-executor.js";
 
+// Executor Factory (auto-selection with fallback)
+export {
+  createClaudeExecutor,
+  getClaudeExecutor,
+  type ClaudeExecutorConfig,
+  type CreateClaudeExecutorOptions,
+  type CreateClaudeExecutorResult,
+  type ExecutorPreference,
+} from "./executor-factory.js";
+
 // Session wrapper
 export { ClaudeSession, type SessionState } from "./session.js";
 
