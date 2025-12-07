@@ -49,8 +49,8 @@
 // Legacy adapter (will be deprecated)
 export { buildClaudeConfig } from "./config-builder.js";
 export type {
-  McpServerConfig as ClaudeMcpServerConfig,
-  McpConfig as ClaudeMcpConfig,
+  McpServerConfig as ClaudeCliMcpServerConfig,
+  McpConfig as ClaudeCliMcpConfig,
 } from "./config-builder.js";
 export * from "./adapter.js";
 
@@ -122,3 +122,22 @@ export { getDirectoryGuardHookPath } from "./hooks/index.js";
 
 // Utils
 export { AsyncQueue } from "./utils/index.js";
+
+// ACP Adapter
+export {
+  ClaudeAcpAdapter,
+  createClaudeAcpAdapter,
+  type ClaudeAcpConfig,
+  type ClaudeMcpServerConfig,
+} from "./acp-adapter.js";
+
+// ACP Types (Claude-specific)
+export {
+  type ClaudeAcpSessionMeta,
+  type ClaudeCodeSdkOptions,
+  type ClaudeAcpMcpServerConfig,
+  type ClaudeHooksConfig,
+  type ClaudeHookEntry,
+  type ClaudeSystemPrompt,
+  type ClaudeNewSessionRequest,
+} from "./acp-types.js";

@@ -41,3 +41,12 @@ export type {
   IAgentRegistry,
   AgentMetadata,
 } from "./agents/types/agent-adapter.js";
+
+// ACP exports
+export { AcpExecutor } from "./agents/acp/executor.js";
+export { AcpNormalizer } from "./agents/acp/normalizer.js";
+export { AcpSession, AcpSessionManager } from "./agents/acp/session.js";
+export { DefaultAcpClient, createAutoApproveClient } from "./agents/acp/client.js";
+export { AcpConnection, spawnAcpAgent } from "./agents/acp/connection.js";
+export type { IAcpAgentAdapter, AcpAgentConfig } from "./agents/acp/adapter.js";
+export { isAcpCapableAdapter, wrapAsAcpAdapter } from "./agents/acp/adapter.js";

@@ -54,3 +54,97 @@ export {
   parseSessionLine as parseCopilotSessionLine,
 } from "./copilot/session.js";
 export { CopilotExecutor } from "./copilot/executor.js";
+
+// ACP module (explicit exports to avoid naming conflicts with claude module)
+export {
+  // SDK classes
+  AgentSideConnection,
+  ClientSideConnection,
+  TerminalHandle,
+  RequestError,
+  ndJsonStream,
+
+  // Protocol constants
+  AGENT_METHODS,
+  CLIENT_METHODS,
+  PROTOCOL_VERSION,
+
+  // Connection utilities
+  AcpConnection,
+  spawnAcpAgent,
+  createConnectionFromStream,
+  createStreamFromStdio,
+  nodeReadableToWebReadable,
+  nodeWritableToWebWritable,
+
+  // Client implementation
+  DefaultAcpClient,
+  createAutoApproveClient,
+  createPermissionClient,
+  createReadOnlyClient,
+
+  // Session management
+  AcpSession,
+  AcpSessionManager,
+
+  // Output normalization
+  AcpNormalizer,
+  normalizeAcpStream,
+
+  // Executor
+  AcpExecutor,
+
+  // Adapter interface
+  isAcpCapableAdapter,
+  wrapAsAcpAdapter,
+} from "./acp/index.js";
+
+// ACP type exports
+export type {
+  // SDK interfaces
+  Agent as AcpAgent,
+  Client as AcpClient,
+  Stream as AcpStream,
+  AnyMessage as AcpAnyMessage,
+
+  // Core types
+  AcpAgentCapabilities,
+  ClientCapabilities as AcpClientCapabilities,
+
+  // Session types
+  SessionId as AcpSessionId,
+  SessionNotification as AcpSessionNotification,
+
+  // Tool types
+  ToolCall as AcpToolCall,
+  ToolCallUpdate as AcpToolCallUpdate,
+  ToolCallStatus as AcpToolCallStatus,
+
+  // Content types
+  ContentBlock as AcpContentBlock,
+  StopReason as AcpStopReason,
+
+  // Custom types
+  IAcpClient,
+  AcpClientOptions,
+  AcpExecutorConfig,
+  AcpSessionState,
+  AcpSessionInfo,
+  AcpPromptResult,
+
+  // Connection types
+  SpawnAcpAgentOptions,
+  SpawnedAcpAgent,
+
+  // Session options
+  AcpSessionOptions,
+
+  // Normalizer options
+  AcpNormalizerOptions,
+
+  // Adapter types
+  IAcpAgentAdapter,
+  AcpAgentConfig,
+  AcpCapabilities,
+  AcpAvailabilityResult,
+} from "./acp/index.js";

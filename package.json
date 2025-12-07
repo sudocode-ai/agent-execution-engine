@@ -41,6 +41,10 @@
       "types": "./dist/agents/codex/index.d.ts",
       "default": "./dist/agents/codex/index.js"
     },
+    "./agents/acp": {
+      "types": "./dist/agents/acp/index.d.ts",
+      "default": "./dist/agents/acp/index.js"
+    },
     "./cli": {
       "types": "./dist/cli/index.d.ts",
       "default": "./dist/cli/index.js"
@@ -87,6 +91,7 @@
   },
   "optionalDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@zed-industries/claude-code-acp": "^0.12.0",
     "node-pty": "^1.0.0"
   },
   "devDependencies": {
