@@ -6,28 +6,25 @@
  * @module agents/claude/executor
  */
 
-import { spawn } from 'child_process';
-import { Readable } from 'stream';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { BaseAgentExecutor } from '../base/base-executor.js';
-import { ProtocolPeer } from './protocol/protocol-peer.js';
-import { ClaudeAgentClient } from './protocol/client.js';
-import {
-  normalizeMessage,
-  createNormalizerState,
-} from './normalizer.js';
-import { parseStreamJsonLine } from './protocol/utils.js';
-import type { ClaudeCodeConfig } from './types/config.js';
-import type { HookConfig } from './types/control.js';
+import { spawn } from "child_process";
+import { Readable } from "stream";
+import * as path from "path";
+import { fileURLToPath } from "url";
+import { BaseAgentExecutor } from "../base/base-executor.js";
+import { ProtocolPeer } from "./protocol/protocol-peer.js";
+import { ClaudeAgentClient } from "./protocol/client.js";
+import { normalizeMessage, createNormalizerState } from "./normalizer.js";
+import { parseStreamJsonLine } from "./protocol/utils.js";
+import type { ClaudeCodeConfig } from "./types/config.js";
+import type { HookConfig } from "./types/control.js";
 import type {
   AgentCapabilities,
   SpawnedChild,
   OutputChunk,
   NormalizedEntry,
-} from '../types/agent-executor.js';
-import type { ExecutionTask } from '../../engine/types.js';
-import type { ManagedProcess } from '../../process/types.js';
+} from "../types/agent-executor.js";
+import type { ExecutionTask } from "../../engine/types.js";
+import type { ManagedProcess } from "../../process/types.js";
 
 // Get directory of this module for finding hook scripts
 const __filename = fileURLToPath(import.meta.url);
@@ -98,19 +95,15 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
 
     // Debug: log the arguments being passed to Claude
     if (process.env.DEBUG_CLAUDE_ARGS) {
-      console.error('[DEBUG] Claude args:', JSON.stringify(args, null, 2));
+      console.error("[DEBUG] Claude args:", JSON.stringify(args, null, 2));
     }
 
     // Spawn claude process
-    const childProcess = spawn(
-      this.config.executablePath || 'claude',
-      args,
-      {
-        cwd: task.workDir,
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'pipe'], // stdin, stdout, stderr
-      }
-    );
+    const childProcess = spawn(this.config.executablePath || "claude", args, {
+      cwd: task.workDir,
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr
+    });
 
     // Create client with approval service
     const client = new ClaudeAgentClient(this.approvalService);
@@ -138,7 +131,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     const claudeProcess: ClaudeManagedProcess = {
       id: `claude-${Date.now()}`,
       pid: childProcess.pid!,
-      status: 'busy',
+      status: "busy",
       spawnedAt: now,
       lastActivity: now,
       exitCode: null,
@@ -180,15 +173,11 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     const hooks = this.buildHooks();
 
     // Spawn claude process with resume flag
-    const childProcess = spawn(
-      this.config.executablePath || 'claude',
-      args,
-      {
-        cwd: task.workDir,
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }
-    );
+    const childProcess = spawn(this.config.executablePath || "claude", args, {
+      cwd: task.workDir,
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
 
     // Create client with approval service
     const client = new ClaudeAgentClient(this.approvalService);
@@ -215,7 +204,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     const claudeProcess: ClaudeManagedProcess = {
       id: `claude-${Date.now()}-resume`,
       pid: childProcess.pid!,
-      status: 'busy',
+      status: "busy",
       spawnedAt: now,
       lastActivity: now,
       exitCode: null,
@@ -254,17 +243,17 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
     workDir: string
   ): AsyncIterable<NormalizedEntry> {
     const state = createNormalizerState();
-    let buffer = '';
+    let buffer = "";
 
     for await (const chunk of outputStream) {
       // Accumulate chunks into buffer
       buffer += chunk.data.toString();
 
       // Split on newlines (stream-json is newline-delimited)
-      const lines = buffer.split('\n');
+      const lines = buffer.split("\n");
 
       // Keep last incomplete line in buffer
-      buffer = lines.pop() || '';
+      buffer = lines.pop() || "";
 
       // Process complete lines
       for (const line of lines) {
@@ -301,7 +290,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
       requiresSetup: false,
       supportsApprovals: true,
       supportsMcp: true,
-      protocol: 'stream-json',
+      protocol: "stream-json",
       supportsMidExecutionMessages: true,
     };
   }
@@ -327,7 +316,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
   async sendMessage(process: ManagedProcess, message: string): Promise<void> {
     const claudeProcess = process as ClaudeManagedProcess;
     if (!claudeProcess.peer) {
-      throw new Error('Process does not have protocol peer attached');
+      throw new Error("Process does not have protocol peer attached");
     }
 
     await claudeProcess.peer.sendUserMessage(message);
@@ -360,7 +349,7 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
       await claudeProcess.peer.sendInterrupt();
     } else if (claudeProcess.process) {
       // Fallback to SIGINT if no peer
-      claudeProcess.process.kill('SIGINT');
+      claudeProcess.process.kill("SIGINT");
     }
   }
 
@@ -385,45 +374,61 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    * @param workDir - Working directory for directory restriction
    * @returns Array of CLI arguments
    */
-  private buildArgs(resume: boolean, sessionId?: string, workDir?: string): string[] {
+  private buildArgs(
+    resume: boolean,
+    sessionId?: string,
+    workDir?: string
+  ): string[] {
     const args: string[] = [];
 
     // Print mode (required for stream-json)
     if (this.config.print !== false) {
-      args.push('--print');
+      args.push("--print");
     }
 
     // Output format
-    const outputFormat = this.config.outputFormat || 'stream-json';
-    args.push('--output-format', outputFormat);
+    const outputFormat = this.config.outputFormat || "stream-json";
+    args.push("--output-format", outputFormat);
 
     // Input format (stream-json for bidirectional protocol)
-    if (outputFormat === 'stream-json') {
-      args.push('--input-format', 'stream-json');
+    if (outputFormat === "stream-json") {
+      args.push("--input-format", "stream-json");
     }
 
     // Permission prompts via stdio (required for approval protocol)
-    args.push('--permission-prompt-tool', 'stdio');
+    args.push("--permission-prompt-tool", "stdio");
 
     // Verbose mode (required when using --print with --output-format=stream-json)
-    if (this.config.verbose || (this.config.print !== false && outputFormat === 'stream-json')) {
-      args.push('--verbose');
+    if (
+      this.config.verbose ||
+      (this.config.print !== false && outputFormat === "stream-json")
+    ) {
+      args.push("--verbose");
     }
 
     // Dangerously skip permissions
     if (this.config.dangerouslySkipPermissions) {
-      args.push('--dangerously-skip-permissions');
+      args.push("--dangerously-skip-permissions");
     }
 
     // Directory restriction via PreToolUse hook
     if (this.config.restrictToWorkDir && workDir) {
       const settings = this.buildDirectoryGuardSettings(workDir);
-      args.push('--settings', JSON.stringify(settings));
+      args.push("--settings", JSON.stringify(settings));
+    }
+
+    // MCP servers configuration
+    if (
+      this.config.mcpServers &&
+      Object.keys(this.config.mcpServers).length > 0
+    ) {
+      const mcpConfig = JSON.stringify({ mcpServers: this.config.mcpServers });
+      args.push("--mcp-config", mcpConfig);
     }
 
     // Resume session
     if (resume && sessionId) {
-      args.push('--resume', sessionId);
+      args.push("--resume", sessionId);
     }
 
     return args;
@@ -438,19 +443,22 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
    * @param workDir - Working directory to restrict to
    * @returns Settings object for --settings flag
    */
-  private buildDirectoryGuardSettings(workDir: string): Record<string, unknown> {
+  private buildDirectoryGuardSettings(
+    workDir: string
+  ): Record<string, unknown> {
     // Get path to the directory guard hook script
-    const hookPath = this.config.directoryGuardHookPath ||
-      path.join(__dirname, 'hooks', 'directory-guard.js');
+    const hookPath =
+      this.config.directoryGuardHookPath ||
+      path.join(__dirname, "hooks", "directory-guard.js");
 
     // Build the hook command with CLAUDE_WORKDIR environment variable
     // Wrap in sh -c to ensure environment variable is set correctly
     // (Claude Code may run hooks without shell interpretation)
-    const isTypeScript = hookPath.endsWith('.ts');
+    const isTypeScript = hookPath.endsWith(".ts");
 
     // Escape special characters for shell safety
     const escapeForShell = (str: string) =>
-      str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
     const escapedWorkDir = escapeForShell(workDir);
     const escapedHookPath = escapeForShell(hookPath);
@@ -465,10 +473,10 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
       hooks: {
         PreToolUse: [
           {
-            matcher: 'Read|Edit|Write|MultiEdit|Glob|Grep',
+            matcher: "Read|Edit|Write|MultiEdit|Glob|Grep",
             hooks: [
               {
-                type: 'command',
+                type: "command",
                 command: hookCommand,
               },
             ],
