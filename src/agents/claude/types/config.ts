@@ -63,7 +63,7 @@ export interface ClaudeCodeConfig {
    *
    * @default 'stream-json'
    */
-  outputFormat?: 'stream-json' | 'json';
+  outputFormat?: "stream-json" | "json";
 
   /**
    * Input format
@@ -74,7 +74,7 @@ export interface ClaudeCodeConfig {
    *
    * This field is kept for backward compatibility but has no effect.
    */
-  inputFormat?: 'stream-json';
+  inputFormat?: "stream-json";
 
   /**
    * Enable verbose output (--verbose flag)
@@ -115,4 +115,52 @@ export interface ClaudeCodeConfig {
    * the executor will use the bundled hook script.
    */
   directoryGuardHookPath?: string;
+
+  /**
+   * MCP servers to connect to Claude Code
+   *
+   * Each key is a server name, and the value defines how to spawn it.
+   * Passed to Claude via --mcp-config flag.
+   *
+   * @example
+   * ```typescript
+   * mcpServers: {
+   *   'my-server': {
+   *     command: 'node',
+   *     args: ['/path/to/server.js', '--port', '3000'],
+   *     env: { API_KEY: 'secret' }
+   *   }
+   * }
+   * ```
+   */
+  mcpServers?: Record<string, McpServerConfig>;
+
+  /**
+   * System prompt to append to Claude's default system prompt
+   *
+   * Useful for adding context about the task or workflow.
+   */
+  appendSystemPrompt?: string;
+}
+
+/**
+ * MCP Server configuration
+ *
+ * Defines how to spawn an MCP server for Claude to connect to.
+ */
+export interface McpServerConfig {
+  /**
+   * The command to run (e.g., 'node', 'python', 'npx')
+   */
+  command: string;
+
+  /**
+   * Arguments to pass to the command
+   */
+  args?: string[];
+
+  /**
+   * Environment variables to set for the server process
+   */
+  env?: Record<string, string>;
 }
