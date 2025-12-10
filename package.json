@@ -71,7 +71,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alexngai/agent-execution-engine.git"
+    "url": "git+https://github.com/sudocode-ai/agent-execution-engine.git"
   },
   "files": [
     "dist",
