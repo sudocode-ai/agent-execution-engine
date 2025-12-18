@@ -426,6 +426,11 @@ export class ClaudeCodeExecutor extends BaseAgentExecutor {
       args.push("--mcp-config", mcpConfig);
     }
 
+    // Disallowed tools
+    if (this.config.disallowedTools && this.config.disallowedTools.length > 0) {
+      args.push("--disallowed-tools", ...this.config.disallowedTools);
+    }
+
     // Resume session
     if (resume && sessionId) {
       args.push("--resume", sessionId);

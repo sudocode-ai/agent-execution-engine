@@ -141,6 +141,21 @@ export interface ClaudeCodeConfig {
    * Useful for adding context about the task or workflow.
    */
   appendSystemPrompt?: string;
+
+  /**
+   * List of tool names to disallow
+   *
+   * Tools in this list will be automatically denied by Claude CLI using the
+   * --disallowed-tools flag. This is useful for blocking tools that the
+   * framework cannot handle or that are incompatible with the execution
+   * environment.
+   *
+   * @example
+   * ```typescript
+   * disallowedTools: ['EnterPlanMode', 'Bash', 'SlashCommand']
+   * ```
+   */
+  disallowedTools?: string[];
 }
 
 /**
