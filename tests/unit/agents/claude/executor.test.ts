@@ -583,4 +583,102 @@ describe('ClaudeCodeExecutor', () => {
       expect(mockSpawn).toHaveBeenCalled();
     });
   });
+
+  describe('Disallowed Tools', () => {
+    it('should add --disallowed-tools flag with tool names', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        disallowedTools: ['EnterPlanMode', 'Bash', 'SlashCommand'],
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      expect(args).toContain('--disallowed-tools');
+
+      // Find the index of --disallowed-tools
+      const disallowedIndex = args.indexOf('--disallowed-tools');
+      expect(disallowedIndex).toBeGreaterThan(-1);
+
+      // Verify the tool names follow the flag
+      expect(args[disallowedIndex + 1]).toBe('EnterPlanMode');
+      expect(args[disallowedIndex + 2]).toBe('Bash');
+      expect(args[disallowedIndex + 3]).toBe('SlashCommand');
+    });
+
+    it('should not add --disallowed-tools flag when empty array', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        disallowedTools: [],
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      expect(args).not.toContain('--disallowed-tools');
+    });
+
+    it('should not add --disallowed-tools flag when undefined', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        // No disallowedTools field
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      expect(args).not.toContain('--disallowed-tools');
+    });
+
+    it('should work with single disallowed tool', async () => {
+      const config: ClaudeCodeConfig = {
+        workDir: '/test',
+        disallowedTools: ['Bash'],
+      };
+
+      executor = new ClaudeCodeExecutor(config);
+
+      const task: ExecutionTask = {
+        id: 'task-1',
+        type: 'claude-code',
+        prompt: 'Test',
+        workDir: '/test',
+      };
+
+      await executor.executeTask(task);
+
+      const [, args] = mockSpawn.mock.calls[0];
+      expect(args).toContain('--disallowed-tools');
+
+      const disallowedIndex = args.indexOf('--disallowed-tools');
+      expect(args[disallowedIndex + 1]).toBe('Bash');
+    });
+  });
 });
