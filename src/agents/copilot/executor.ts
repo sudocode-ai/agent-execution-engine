@@ -362,11 +362,21 @@ export class CopilotExecutor extends BaseAgentExecutor {
 
     // MCP server configuration - inline servers
     if (this.config.mcpServers && Object.keys(this.config.mcpServers).length > 0) {
-      // Build JSON object with all MCP servers
-      // Format: {"mcpServers": {"server-name": {"command": "...", "args": [...], "env": {...}}}}
-      const mcpConfig = {
-        mcpServers: this.config.mcpServers,
-      };
+      // Build JSON object with all MCP servers, applying defaults
+      // Format: {"mcpServers": {"server-name": {"type": "local", "command": "...", "args": [...], "env": {...}, "tools": ["*"]}}}
+      const mcpServers: Record<string, any> = {};
+
+      for (const [serverName, serverConfig] of Object.entries(this.config.mcpServers)) {
+        mcpServers[serverName] = {
+          type: serverConfig.type ?? 'local',  // Default to 'local'
+          command: serverConfig.command,
+          args: serverConfig.args ?? [],       // Default to empty array
+          tools: serverConfig.tools ?? ['*'],  // Default to all tools
+          ...(serverConfig.env ? { env: serverConfig.env } : {}),
+        };
+      }
+
+      const mcpConfig = { mcpServers };
       const mcpConfigJson = JSON.stringify(mcpConfig);
       args.push('--additional-mcp-config', mcpConfigJson);
     }

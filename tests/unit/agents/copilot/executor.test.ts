@@ -216,9 +216,11 @@ describe('CopilotExecutor', () => {
 
       expect(config).toHaveProperty('mcpServers');
       expect(config.mcpServers).toHaveProperty('my-server');
+      expect(config.mcpServers['my-server'].type).toBe('local'); // Default
       expect(config.mcpServers['my-server'].command).toBe('node');
       expect(config.mcpServers['my-server'].args).toEqual(['/path/to/server.js']);
       expect(config.mcpServers['my-server'].env).toEqual({ API_KEY: 'secret' });
+      expect(config.mcpServers['my-server'].tools).toEqual(['*']); // Default
     });
 
     it('should include multiple MCP servers in single --additional-mcp-config', () => {
@@ -267,8 +269,12 @@ describe('CopilotExecutor', () => {
       const configJson = args[configIndex + 1];
       const config = JSON.parse(configJson);
 
+      // Should apply defaults
       expect(config.mcpServers['minimal-server']).toEqual({
+        type: 'local',
         command: 'npx',
+        args: [],
+        tools: ['*'],
       });
     });
 
@@ -291,6 +297,76 @@ describe('CopilotExecutor', () => {
       const args = (executor as any).buildArgs('/tmp/logs', undefined);
 
       expect(args).not.toContain('--additional-mcp-config');
+    });
+
+    it('should handle custom tools array', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {
+          'custom-tools-server': {
+            command: 'npx',
+            tools: ['read_file', 'write_file'],
+          },
+        },
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      const configIndex = args.indexOf('--additional-mcp-config');
+      const configJson = args[configIndex + 1];
+      const config = JSON.parse(configJson);
+
+      expect(config.mcpServers['custom-tools-server'].tools).toEqual([
+        'read_file',
+        'write_file',
+      ]);
+    });
+
+    it('should handle custom type field', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {
+          'custom-type-server': {
+            type: 'remote',
+            command: 'npx',
+          },
+        },
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      const configIndex = args.indexOf('--additional-mcp-config');
+      const configJson = args[configIndex + 1];
+      const config = JSON.parse(configJson);
+
+      expect(config.mcpServers['custom-type-server'].type).toBe('remote');
+    });
+
+    it('should handle sudocode-mcp config with all tools', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {
+          'sudocode-mcp': {
+            type: 'local',
+            command: 'sudocode-mcp',
+            args: [],
+            tools: ['*'],
+          },
+        },
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      const configIndex = args.indexOf('--additional-mcp-config');
+      const configJson = args[configIndex + 1];
+      const config = JSON.parse(configJson);
+
+      expect(config.mcpServers['sudocode-mcp']).toEqual({
+        type: 'local',
+        command: 'sudocode-mcp',
+        args: [],
+        tools: ['*'],
+      });
     });
   });
 

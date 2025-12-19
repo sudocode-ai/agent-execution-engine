@@ -16,12 +16,22 @@ import type { BaseAgentConfig } from '../types/agent-adapter.js';
  */
 export interface McpServerConfig {
   /**
+   * The type of MCP server
+   *
+   * @default "local"
+   * @example "local"
+   */
+  type?: string;
+
+  /**
    * The command to run (e.g., 'node', 'python', 'npx')
    */
   command: string;
 
   /**
    * Arguments to pass to the command
+   *
+   * @default []
    */
   args?: string[];
 
@@ -29,6 +39,17 @@ export interface McpServerConfig {
    * Environment variables to set for the server process
    */
   env?: Record<string, string>;
+
+  /**
+   * Tools to enable from this MCP server
+   *
+   * Use ["*"] to enable all tools from this server.
+   *
+   * @default ["*"]
+   * @example ["*"]
+   * @example ["read_file", "write_file"]
+   */
+  tools?: string[];
 }
 
 /**
@@ -165,9 +186,17 @@ export interface CopilotConfig extends BaseAgentConfig {
    * ```typescript
    * mcpServers: {
    *   'my-server': {
+   *     type: 'local',
    *     command: 'node',
    *     args: ['/path/to/server.js', '--port', '3000'],
-   *     env: { API_KEY: 'secret' }
+   *     env: { API_KEY: 'secret' },
+   *     tools: ['*']  // Enable all tools from this server
+   *   },
+   *   'sudocode-mcp': {
+   *     type: 'local',
+   *     command: 'sudocode-mcp',
+   *     args: [],
+   *     tools: ['*']
    *   }
    * }
    * ```
@@ -312,6 +341,33 @@ export function validateCopilotConfig(
             });
           }
         }
+      }
+
+      // Validate tools array
+      if (serverConfig.tools) {
+        if (!Array.isArray(serverConfig.tools)) {
+          errors.push({
+            field: 'mcpServers',
+            message: `MCP server '${serverName}' tools must be an array`,
+          });
+        } else {
+          for (const tool of serverConfig.tools) {
+            if (typeof tool !== 'string') {
+              errors.push({
+                field: 'mcpServers',
+                message: `MCP server '${serverName}' has non-string tool name`,
+              });
+            }
+          }
+        }
+      }
+
+      // Validate type field
+      if (serverConfig.type && typeof serverConfig.type !== 'string') {
+        errors.push({
+          field: 'mcpServers',
+          message: `MCP server '${serverName}' type must be a string`,
+        });
       }
     }
   }
