@@ -274,4 +274,148 @@ describe('buildCodexConfig', () => {
     expect(typeof config.executablePath).toBe('string');
     expect(typeof config.workDir).toBe('string');
   });
+
+  describe('MCP server configuration', () => {
+    it('includes MCP server command via -c flag', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+          },
+        },
+      });
+
+      expect(config.args.includes('-c')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.command="node"')).toBeTruthy();
+    });
+
+    it('includes MCP server args as JSON array', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            args: ['server.js', '--port', '3000'],
+          },
+        },
+      });
+
+      expect(config.args.includes('-c')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.args=["server.js","--port","3000"]')).toBeTruthy();
+    });
+
+    it('includes MCP server env variables', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            env: {
+              API_KEY: 'secret',
+              PORT: '3000',
+            },
+          },
+        },
+      });
+
+      expect(config.args.includes('mcp_servers.my-server.env.API_KEY="secret"')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.env.PORT="3000"')).toBeTruthy();
+    });
+
+    it('includes full MCP server configuration', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            args: ['/path/to/server.js', '--port', '3000'],
+            env: {
+              API_KEY: 'secret',
+            },
+          },
+        },
+      });
+
+      // Should include all -c flags for MCP server
+      expect(config.args.includes('mcp_servers.my-server.command="node"')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.args=["/path/to/server.js","--port","3000"]')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.env.API_KEY="secret"')).toBeTruthy();
+    });
+
+    it('includes multiple MCP servers', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'server-1': {
+            command: 'node',
+            args: ['server1.js'],
+          },
+          'server-2': {
+            command: 'python',
+            args: ['server2.py'],
+          },
+        },
+      });
+
+      // Should include -c flags for both servers
+      expect(config.args.includes('mcp_servers.server-1.command="node"')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.server-1.args=["server1.js"]')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.server-2.command="python"')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.server-2.args=["server2.py"]')).toBeTruthy();
+    });
+
+    it('handles MCP server with no args or env', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'simple-server': {
+            command: 'npx',
+          },
+        },
+      });
+
+      // Should only include command flag, no args or env
+      expect(config.args.includes('mcp_servers.simple-server.command="npx"')).toBeTruthy();
+      expect(config.args.filter((arg) => arg.includes('mcp_servers.simple-server.args')).length).toBe(0);
+      expect(config.args.filter((arg) => arg.includes('mcp_servers.simple-server.env')).length).toBe(0);
+    });
+
+    it('handles empty args array', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            args: [],
+          },
+        },
+      });
+
+      // Should not include args flag for empty array
+      expect(config.args.includes('mcp_servers.my-server.command="node"')).toBeTruthy();
+      expect(config.args.filter((arg) => arg.includes('mcp_servers.my-server.args')).length).toBe(0);
+    });
+
+    it('combines MCP servers with other flags', () => {
+      const config = buildCodexConfig({
+        workDir: '/test/dir',
+        json: true,
+        model: 'gpt-5-codex',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            args: ['server.js'],
+          },
+        },
+      });
+
+      // Should include both MCP and other flags
+      expect(config.args.includes('--json')).toBeTruthy();
+      expect(config.args.includes('--model')).toBeTruthy();
+      expect(config.args.includes('gpt-5-codex')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.command="node"')).toBeTruthy();
+      expect(config.args.includes('mcp_servers.my-server.args=["server.js"]')).toBeTruthy();
+    });
+  });
 });

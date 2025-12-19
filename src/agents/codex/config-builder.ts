@@ -10,6 +10,28 @@
 import type { ProcessConfig } from '../../process/types.js';
 
 /**
+ * MCP server configuration
+ *
+ * Defines how to spawn an MCP server for Codex to connect to.
+ */
+export interface McpServerConfig {
+  /**
+   * The command to run (e.g., 'node', 'python', 'npx')
+   */
+  command: string;
+
+  /**
+   * Arguments to pass to the command
+   */
+  args?: string[];
+
+  /**
+   * Environment variables to set for the server process
+   */
+  env?: Record<string, string>;
+}
+
+/**
  * Configuration options specific to OpenAI Codex CLI
  */
 export interface CodexConfig {
@@ -136,6 +158,25 @@ export interface CodexConfig {
    * Prompt to send to Codex
    */
   prompt?: string;
+
+  /**
+   * MCP servers to configure inline
+   *
+   * Maps to -c mcp_servers.{name}.{field}=value flags using TOML format.
+   * Overrides values from ~/.codex/config.toml for this session.
+   *
+   * @example
+   * ```typescript
+   * mcpServers: {
+   *   'my-server': {
+   *     command: 'node',
+   *     args: ['/path/to/server.js', '--port', '3000'],
+   *     env: { API_KEY: 'secret' }
+   *   }
+   * }
+   * ```
+   */
+  mcpServers?: Record<string, McpServerConfig>;
 }
 
 /**
@@ -254,6 +295,27 @@ export function buildCodexConfig(config: CodexConfig): ProcessConfig {
     args.push('--dangerously-bypass-approvals-and-sandbox');
     // Alternative: --yolo
     // args.push('--yolo');
+  }
+
+  // Add MCP server configurations via -c flag
+  if (config.mcpServers) {
+    for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
+      // Add command
+      args.push('-c', `mcp_servers.${serverName}.command="${serverConfig.command}"`);
+
+      // Add args array (if provided)
+      if (serverConfig.args && serverConfig.args.length > 0) {
+        const argsToml = JSON.stringify(serverConfig.args);
+        args.push('-c', `mcp_servers.${serverName}.args=${argsToml}`);
+      }
+
+      // Add env variables (if provided)
+      if (serverConfig.env) {
+        for (const [key, value] of Object.entries(serverConfig.env)) {
+          args.push('-c', `mcp_servers.${serverName}.env.${key}="${value}"`);
+        }
+      }
+    }
   }
 
   // Set working directory using --cd flag (if different from process cwd)

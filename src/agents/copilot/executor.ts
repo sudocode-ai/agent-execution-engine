@@ -360,7 +360,18 @@ export class CopilotExecutor extends BaseAgentExecutor {
       }
     }
 
-    // MCP server configuration
+    // MCP server configuration - inline servers
+    if (this.config.mcpServers && Object.keys(this.config.mcpServers).length > 0) {
+      // Build JSON object with all MCP servers
+      // Format: {"mcpServers": {"server-name": {"command": "...", "args": [...], "env": {...}}}}
+      const mcpConfig = {
+        mcpServers: this.config.mcpServers,
+      };
+      const mcpConfigJson = JSON.stringify(mcpConfig);
+      args.push('--additional-mcp-config', mcpConfigJson);
+    }
+
+    // MCP server configuration - disable servers
     if (this.config.disableMcpServer) {
       for (const server of this.config.disableMcpServer) {
         args.push('--disable-mcp-server', server);
