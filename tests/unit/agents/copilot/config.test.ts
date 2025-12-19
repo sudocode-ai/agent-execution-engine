@@ -227,5 +227,121 @@ describe('CopilotConfig Validation', () => {
       const errors = validateCopilotConfig(config);
       expect(errors).toHaveLength(0);
     });
+
+    it('should pass validation for valid tools array', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            tools: ['*'],
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should pass validation for custom tools array', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            tools: ['read_file', 'write_file'],
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should detect non-array tools value', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            tools: 'invalid' as any, // Invalid non-array value
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(
+        errors.some((e: any) => e.message.includes('tools must be an array'))
+      ).toBe(true);
+    });
+
+    it('should detect non-string tool name', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            tools: ['read_file', 123 as any], // Invalid non-string tool
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(
+        errors.some((e: any) => e.message.includes('non-string tool name'))
+      ).toBe(true);
+    });
+
+    it('should pass validation for valid type field', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            type: 'local',
+            command: 'node',
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should detect non-string type value', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            type: 123 as any, // Invalid non-string type
+            command: 'node',
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(
+        errors.some((e: any) => e.message.includes('type must be a string'))
+      ).toBe(true);
+    });
+
+    it('should validate sudocode-mcp config', () => {
+      const config: CopilotConfig = {
+        workDir: '/tmp/test',
+        mcpServers: {
+          'sudocode-mcp': {
+            type: 'local',
+            command: 'sudocode-mcp',
+            args: [],
+            tools: ['*'],
+          },
+        },
+      };
+
+      const errors = validateCopilotConfig(config);
+      expect(errors).toHaveLength(0);
+    });
   });
 });
