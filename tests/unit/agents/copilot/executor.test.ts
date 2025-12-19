@@ -192,6 +192,106 @@ describe('CopilotExecutor', () => {
       expect(args).toContain('server1');
       expect(args).toContain('server2');
     });
+
+    it('should include MCP servers inline config in args', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {
+          'my-server': {
+            command: 'node',
+            args: ['/path/to/server.js'],
+            env: { API_KEY: 'secret' },
+          },
+        },
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      expect(args).toContain('--additional-mcp-config');
+      const configIndex = args.indexOf('--additional-mcp-config');
+      expect(configIndex).toBeGreaterThan(-1);
+
+      const configJson = args[configIndex + 1];
+      const config = JSON.parse(configJson);
+
+      expect(config).toHaveProperty('mcpServers');
+      expect(config.mcpServers).toHaveProperty('my-server');
+      expect(config.mcpServers['my-server'].command).toBe('node');
+      expect(config.mcpServers['my-server'].args).toEqual(['/path/to/server.js']);
+      expect(config.mcpServers['my-server'].env).toEqual({ API_KEY: 'secret' });
+    });
+
+    it('should include multiple MCP servers in single --additional-mcp-config', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {
+          server1: {
+            command: 'node',
+            args: ['server1.js'],
+          },
+          server2: {
+            command: 'python',
+            args: ['-m', 'server2'],
+            env: { DEBUG: 'true' },
+          },
+        },
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      const configFlags = args.filter((arg: string) => arg === '--additional-mcp-config');
+      expect(configFlags).toHaveLength(1); // Single flag with all servers
+
+      const configIndex = args.indexOf('--additional-mcp-config');
+      const configJson = args[configIndex + 1];
+      const config = JSON.parse(configJson);
+
+      expect(Object.keys(config.mcpServers)).toHaveLength(2);
+      expect(config.mcpServers).toHaveProperty('server1');
+      expect(config.mcpServers).toHaveProperty('server2');
+    });
+
+    it('should handle MCP servers with minimal config', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {
+          'minimal-server': {
+            command: 'npx',
+          },
+        },
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      const configIndex = args.indexOf('--additional-mcp-config');
+      const configJson = args[configIndex + 1];
+      const config = JSON.parse(configJson);
+
+      expect(config.mcpServers['minimal-server']).toEqual({
+        command: 'npx',
+      });
+    });
+
+    it('should not include --additional-mcp-config when mcpServers is undefined', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      expect(args).not.toContain('--additional-mcp-config');
+    });
+
+    it('should not include --additional-mcp-config when mcpServers is empty', () => {
+      const executor = new CopilotExecutor({
+        workDir: '/tmp/test',
+        mcpServers: {},
+      });
+
+      const args = (executor as any).buildArgs('/tmp/logs', undefined);
+
+      expect(args).not.toContain('--additional-mcp-config');
+    });
   });
 
   describe('Prompt Combination', () => {

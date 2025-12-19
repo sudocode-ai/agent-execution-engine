@@ -10,6 +10,7 @@
 export type {
   CopilotConfig,
   CopilotConfigValidationError,
+  McpServerConfig,
 } from './config.js';
 export { validateCopilotConfig } from './config.js';
 

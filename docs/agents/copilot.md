@@ -121,6 +121,7 @@ interface CopilotConfig {
   addDir?: string[];                  // Additional directories for context
 
   // MCP Configuration
+  mcpServers?: Record<string, McpServerConfig>;  // Inline MCP server definitions
   disableMcpServer?: string[];        // MCP servers to disable by name
 
   // Prompt Customization
@@ -175,6 +176,12 @@ const config = {
   workDir: '/path/to/project',
   allowAllTools: true,
   allowTool: 'bash',  // Ignored when allowAllTools is true
+  mcpServers: {
+    'my-server': {
+      command: 'node',
+      args: ['server.js'],
+    },
+  },
 };
 
 const errors = validateCopilotConfig(config);
@@ -185,6 +192,17 @@ if (errors.length > 0) {
   });
 }
 ```
+
+**Validation checks include**:
+- Tool permission conflicts
+- Empty paths in `addDir`
+- Empty server names in `disableMcpServer`
+- MCP server validation:
+  - Empty server names
+  - Missing or empty command
+  - Non-string arguments
+  - Empty environment variable names
+  - Non-string environment variable values
 
 ## Features
 
@@ -345,9 +363,16 @@ The executor:
 
 ## MCP Integration
 
-### MCP Configuration File
+### Overview
 
-Copilot uses MCP (Model Context Protocol) servers configured in `~/.copilot/mcp-config.json`:
+Copilot CLI supports MCP (Model Context Protocol) servers through two mechanisms:
+
+1. **Global Configuration**: `~/.copilot/mcp-config.json` (persisted across sessions)
+2. **Inline Configuration**: `mcpServers` config option (session-specific, augments global config)
+
+### Global MCP Configuration
+
+MCP servers configured in `~/.copilot/mcp-config.json` are available to all Copilot sessions:
 
 ```json
 {
@@ -367,9 +392,111 @@ Copilot uses MCP (Model Context Protocol) servers configured in `~/.copilot/mcp-
 }
 ```
 
+### Inline MCP Configuration
+
+Configure MCP servers programmatically for specific tasks using the `mcpServers` config option:
+
+```typescript
+const executor = new CopilotExecutor({
+  workDir: './project',
+  mcpServers: {
+    'my-custom-server': {
+      command: 'node',
+      args: ['/path/to/server.js', '--port', '3000'],
+      env: {
+        API_KEY: 'secret',
+        DEBUG: 'true',
+      },
+    },
+    'filesystem': {
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', './project'],
+    },
+  },
+});
+```
+
+**Key Features**:
+- Inline servers augment global configuration for the session
+- If a server name conflicts, inline definition takes precedence
+- Useful for task-specific servers or temporary configurations
+- No need to modify global `~/.copilot/mcp-config.json`
+
+### MCP Server Definition
+
+Each MCP server is defined by:
+
+```typescript
+interface McpServerConfig {
+  command: string;        // Executable (e.g., 'node', 'python', 'npx')
+  args?: string[];        // Command arguments
+  env?: Record<string, string>;  // Environment variables
+}
+```
+
+**Examples**:
+
+```typescript
+// Node.js server
+{
+  command: 'node',
+  args: ['/path/to/server.js'],
+  env: { PORT: '3000' }
+}
+
+// Python server
+{
+  command: 'python',
+  args: ['-m', 'my_mcp_server'],
+  env: { PYTHONPATH: '/path/to/modules' }
+}
+
+// NPX package
+{
+  command: 'npx',
+  args: ['-y', '@modelcontextprotocol/server-filesystem', '.']
+}
+```
+
+### Combining Global and Inline Configurations
+
+Inline MCP servers augment (not replace) global configuration:
+
+```typescript
+// Global config (~/.copilot/mcp-config.json):
+// {
+//   "mcpServers": {
+//     "github": { "command": "npx", "args": [...] },
+//     "slack": { "command": "npx", "args": [...] }
+//   }
+// }
+
+const executor = new CopilotExecutor({
+  workDir: './project',
+  mcpServers: {
+    // Add task-specific server
+    'custom-api': {
+      command: 'node',
+      args: ['./api-server.js'],
+    },
+    // Override global github server for this task
+    'github': {
+      command: 'node',
+      args: ['./custom-github-server.js'],
+      env: { GITHUB_TOKEN: 'task-specific-token' },
+    },
+  },
+});
+
+// Result: Copilot uses these servers:
+// - github: Custom override (inline config)
+// - slack: Global config
+// - custom-api: Inline config only
+```
+
 ### Disabling MCP Servers
 
-Disable specific servers per executor:
+Disable specific servers (from global or inline config) per executor:
 
 ```typescript
 const executor = new CopilotExecutor({
@@ -377,6 +504,11 @@ const executor = new CopilotExecutor({
   disableMcpServer: ['github', 'slack'],  // Disable these servers
 });
 ```
+
+This is useful for:
+- Disabling slow or unreliable servers for specific tasks
+- Testing without certain capabilities
+- Limiting context to specific servers
 
 ### Checking MCP Availability
 

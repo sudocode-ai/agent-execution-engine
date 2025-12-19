@@ -10,6 +10,28 @@
 import type { BaseAgentConfig } from '../types/agent-adapter.js';
 
 /**
+ * MCP Server configuration
+ *
+ * Defines how to spawn an MCP server for Copilot to connect to.
+ */
+export interface McpServerConfig {
+  /**
+   * The command to run (e.g., 'node', 'python', 'npx')
+   */
+  command: string;
+
+  /**
+   * Arguments to pass to the command
+   */
+  args?: string[];
+
+  /**
+   * Environment variables to set for the server process
+   */
+  env?: Record<string, string>;
+}
+
+/**
  * GitHub Copilot CLI configuration options
  *
  * Extends BaseAgentConfig with Copilot-specific settings for model selection,
@@ -131,6 +153,28 @@ export interface CopilotConfig extends BaseAgentConfig {
   addDir?: string[];
 
   /**
+   * MCP servers to configure inline
+   *
+   * Each key is a server name, and the value defines how to spawn it.
+   * Passed to Copilot via --additional-mcp-config flag.
+   *
+   * This augments servers defined in `~/.copilot/mcp-config.json` for this session.
+   * Inline servers take precedence over global config if names conflict.
+   *
+   * @example
+   * ```typescript
+   * mcpServers: {
+   *   'my-server': {
+   *     command: 'node',
+   *     args: ['/path/to/server.js', '--port', '3000'],
+   *     env: { API_KEY: 'secret' }
+   *   }
+   * }
+   * ```
+   */
+  mcpServers?: Record<string, McpServerConfig>;
+
+  /**
    * MCP servers to disable
    *
    * Array of MCP server names to disable for this execution.
@@ -218,6 +262,56 @@ export function validateCopilotConfig(
           field: 'addDir',
           message: 'addDir contains empty path',
         });
+      }
+    }
+  }
+
+  // Validate mcpServers
+  if (config.mcpServers) {
+    for (const [serverName, serverConfig] of Object.entries(config.mcpServers)) {
+      if (!serverName || serverName.trim() === '') {
+        errors.push({
+          field: 'mcpServers',
+          message: 'mcpServers contains empty server name',
+        });
+        continue;
+      }
+
+      if (!serverConfig.command || serverConfig.command.trim() === '') {
+        errors.push({
+          field: 'mcpServers',
+          message: `MCP server '${serverName}' has empty command`,
+        });
+      }
+
+      // Validate args array
+      if (serverConfig.args) {
+        for (const arg of serverConfig.args) {
+          if (typeof arg !== 'string') {
+            errors.push({
+              field: 'mcpServers',
+              message: `MCP server '${serverName}' has non-string argument`,
+            });
+          }
+        }
+      }
+
+      // Validate env object
+      if (serverConfig.env) {
+        for (const [key, value] of Object.entries(serverConfig.env)) {
+          if (!key || key.trim() === '') {
+            errors.push({
+              field: 'mcpServers',
+              message: `MCP server '${serverName}' has empty environment variable name`,
+            });
+          }
+          if (typeof value !== 'string') {
+            errors.push({
+              field: 'mcpServers',
+              message: `MCP server '${serverName}' has non-string environment variable value for '${key}'`,
+            });
+          }
+        }
       }
     }
   }

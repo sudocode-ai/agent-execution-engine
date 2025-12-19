@@ -8,6 +8,28 @@
  */
 
 /**
+ * MCP server configuration
+ *
+ * Defines how to spawn an MCP server for Codex to connect to.
+ */
+export interface McpServerConfig {
+  /**
+   * The command to run (e.g., 'node', 'python', 'npx')
+   */
+  command: string;
+
+  /**
+   * Arguments to pass to the command
+   */
+  args?: string[];
+
+  /**
+   * Environment variables to set for the server process
+   */
+  env?: Record<string, string>;
+}
+
+/**
  * Configuration options for Codex CLI executor
  */
 export interface CodexConfig {
@@ -40,4 +62,23 @@ export interface CodexConfig {
    * @default true (for structured parsing)
    */
   json?: boolean;
+
+  /**
+   * MCP servers to configure inline
+   *
+   * Maps to -c mcp_servers.{name}.{field}=value flags using TOML format.
+   * Overrides values from ~/.codex/config.toml for this session.
+   *
+   * @example
+   * ```typescript
+   * mcpServers: {
+   *   'my-server': {
+   *     command: 'node',
+   *     args: ['/path/to/server.js', '--port', '3000'],
+   *     env: { API_KEY: 'secret' }
+   *   }
+   * }
+   * ```
+   */
+  mcpServers?: Record<string, McpServerConfig>;
 }
