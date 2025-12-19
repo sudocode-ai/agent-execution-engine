@@ -420,6 +420,35 @@ export class CodexExecutor extends BaseAgentExecutor {
       args.push("--full-auto");
     }
 
+    // Add MCP server configurations via -c flag
+    if (this.config.mcpServers) {
+      for (const [serverName, serverConfig] of Object.entries(
+        this.config.mcpServers
+      )) {
+        // Add command
+        args.push(
+          "-c",
+          `mcp_servers.${serverName}.command="${serverConfig.command}"`
+        );
+
+        // Add args array (if provided)
+        if (serverConfig.args && serverConfig.args.length > 0) {
+          const argsToml = JSON.stringify(serverConfig.args);
+          args.push("-c", `mcp_servers.${serverName}.args=${argsToml}`);
+        }
+
+        // Add env variables (if provided)
+        if (serverConfig.env) {
+          for (const [key, value] of Object.entries(serverConfig.env)) {
+            args.push(
+              "-c",
+              `mcp_servers.${serverName}.env.${key}="${value}"`
+            );
+          }
+        }
+      }
+    }
+
     return args;
   }
 
@@ -449,6 +478,35 @@ export class CodexExecutor extends BaseAgentExecutor {
       args.push("--dangerously-bypass-approvals-and-sandbox");
     } else {
       args.push("--full-auto");
+    }
+
+    // Add MCP server configurations via -c flag
+    if (this.config.mcpServers) {
+      for (const [serverName, serverConfig] of Object.entries(
+        this.config.mcpServers
+      )) {
+        // Add command
+        args.push(
+          "-c",
+          `mcp_servers.${serverName}.command="${serverConfig.command}"`
+        );
+
+        // Add args array (if provided)
+        if (serverConfig.args && serverConfig.args.length > 0) {
+          const argsToml = JSON.stringify(serverConfig.args);
+          args.push("-c", `mcp_servers.${serverName}.args=${argsToml}`);
+        }
+
+        // Add env variables (if provided)
+        if (serverConfig.env) {
+          for (const [key, value] of Object.entries(serverConfig.env)) {
+            args.push(
+              "-c",
+              `mcp_servers.${serverName}.env.${key}="${value}"`
+            );
+          }
+        }
+      }
     }
 
     return args;
